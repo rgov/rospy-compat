@@ -2,8 +2,8 @@
 Changelog for package ros_tutorials
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.10.3 (2025-04-10)
+-------------------
 * Update maintainers (`#102 <https://github.com/ros/ros_tutorials/issues/102>`_)
 * Contributors: Shane Loretz
 
