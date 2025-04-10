@@ -2,6 +2,12 @@
 Changelog for package roscpp_tutorials
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* use boost::placeholders::_1 instead of deprecated _1, and boost/bind/bind.hpp instead of bind.hpp (`#142 <https://github.com/ros/ros_tutorials/issues/142>`_)
+* Update maintainers (`#102 <https://github.com/ros/ros_tutorials/issues/102>`_)
+* Contributors: Lucas Walter, Shane Loretz
+
 0.10.2 (2020-07-31)
 -------------------
 

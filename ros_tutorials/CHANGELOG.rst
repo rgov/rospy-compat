@@ -2,6 +2,11 @@
 Changelog for package ros_tutorials
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Update maintainers (`#102 <https://github.com/ros/ros_tutorials/issues/102>`_)
+* Contributors: Shane Loretz
+
 0.10.2 (2020-07-31)
 -------------------
 
