@@ -38,7 +38,7 @@
 
 import sys 
 
-import rospy
+import rospy_compat as rospy
 from rospy_tutorials.msg import HeaderString
 
 NAME = 'listener_header'

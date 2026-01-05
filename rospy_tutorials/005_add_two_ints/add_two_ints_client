@@ -39,9 +39,9 @@
 import sys
 import os
 
-import rospy
+import rospy_compat as rospy
 
-# imports the AddTwoInts service 
+# imports the AddTwoInts service
 from rospy_tutorials.srv import *
 
 ## add two numbers using the add_two_ints service

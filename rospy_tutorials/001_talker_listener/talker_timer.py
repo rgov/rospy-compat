@@ -34,7 +34,7 @@
 ## Timer-based talker demo that published std_msgs/Strings messages
 ## to the 'chatter' topic.
 
-import rospy
+import rospy_compat as rospy
 from std_msgs.msg import String
 
 
