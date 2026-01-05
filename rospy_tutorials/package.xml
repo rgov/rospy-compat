@@ -1,7 +1,8 @@
 <?xml version="1.0"?>
-<package>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>rospy_tutorials</name>
-  <version>0.10.3</version>
+  <version>2.0.0</version>
   <description>
     This package attempts to show the features of ROS python API step-by-step,
     including using messages, servers, parameters, etc. These tutorials are compatible with the nodes in roscpp_tutorial.
@@ -16,15 +17,16 @@
   <author>Ken Conley</author>
   <author email="dthomas@osrfoundation.org">Dirk Thomas</author>
 
-  <buildtool_depend version_gte="0.5.68">catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
 
-  <build_depend>message_generation</build_depend>
-  <build_depend>rostest</build_depend>
-  <build_depend>std_msgs</build_depend>
+  <depend>std_msgs</depend>
 
-  <run_depend>message_runtime</run_depend>
-  <run_depend>rospy</run_depend>
-  <run_depend>std_msgs</run_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
 
-  <test_depend>roscpp_tutorials</test_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>
