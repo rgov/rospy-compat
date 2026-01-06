@@ -111,27 +111,34 @@ class MessageImportLoader(Loader):
 
 def _wrap_message_module(original_module):
     """
-    Scan module for message classes and wrap them with ROS1-compatible versions.
+    Scan module for message/service classes and wrap them with ROS1-compatible versions.
+
+    Also detects service types and injects standalone Request/Response classes
+    for ROS1 compatibility (e.g., AddTwoIntsRequest, AddTwoIntsResponse).
 
     Args:
-        original_module: The original ROS2 message module
+        original_module: The original ROS2 message/service module
 
     Returns:
-        A new module object with wrapped message classes
+        A new module object with wrapped message classes and service aliases
     """
     wrapped_attrs = {}
 
     for attr_name in dir(original_module):
         attr = getattr(original_module, attr_name)
 
-        # Check if this is a message class (has _fields_and_field_types)
-        if (isinstance(attr, type) and
-            hasattr(attr, '_fields_and_field_types') and
-            hasattr(attr, '__slots__')):
+        # Check for service types first (has Request/Response nested classes)
+        if _is_service_type(attr):
+            # Wrap service type and inject Request/Response aliases
+            wrapped_attrs[attr_name] = _wrap_service_type(attr_name, attr, wrapped_attrs)
+        # Then check if this is a message class (has _fields_and_field_types)
+        elif (isinstance(attr, type) and
+              hasattr(attr, '_fields_and_field_types') and
+              hasattr(attr, '__slots__')):
             # Wrap this message class
             wrapped_attrs[attr_name] = _create_message_wrapper(attr)
         else:
-            # Keep non-message attributes as-is
+            # Keep non-message/service attributes as-is
             wrapped_attrs[attr_name] = attr
 
     # Create a new module-like object with wrapped attributes
@@ -227,6 +234,73 @@ def _create_message_wrapper(original_class):
     original_class._original_ros2_init = original_init
 
     return original_class
+
+
+def _is_service_type(attr):
+    """
+    Check if an attribute is a ROS2 service type class.
+
+    Service types have nested Request and Response classes that are
+    themselves message-like classes with _fields_and_field_types.
+
+    Args:
+        attr: Module attribute to check
+
+    Returns:
+        bool: True if attr is a service type, False otherwise
+    """
+    return (
+        isinstance(attr, type) and
+        hasattr(attr, 'Request') and
+        hasattr(attr, 'Response') and
+        isinstance(attr.Request, type) and
+        isinstance(attr.Response, type) and
+        hasattr(attr.Request, '_fields_and_field_types') and
+        hasattr(attr.Response, '_fields_and_field_types')
+    )
+
+
+def _wrap_service_type(service_name, service_class, wrapped_attrs):
+    """
+    Wrap a service type's nested Request/Response classes and inject standalone aliases.
+
+    For a service type like 'AddTwoInts', this:
+    1. Wraps AddTwoInts.Request to support positional args
+    2. Wraps AddTwoInts.Response to support positional args
+    3. Injects 'AddTwoIntsRequest' as alias to wrapped Request
+    4. Injects 'AddTwoIntsResponse' as alias to wrapped Response
+
+    This enables ROS1-style service usage:
+        from pkg.srv import AddTwoInts, AddTwoIntsResponse
+        return AddTwoIntsResponse(sum_value)  # Positional arg support
+
+    Args:
+        service_name (str): Name of the service type (e.g., 'AddTwoInts')
+        service_class: The service type class
+        wrapped_attrs (dict): Dictionary to inject the aliases into
+
+    Returns:
+        The service class (with wrapped nested classes)
+    """
+    # Wrap the nested Request class
+    if hasattr(service_class, 'Request'):
+        wrapped_request = _create_message_wrapper(service_class.Request)
+        service_class.Request = wrapped_request
+
+        # Inject standalone Request alias: AddTwoIntsRequest
+        request_alias_name = f"{service_name}Request"
+        wrapped_attrs[request_alias_name] = wrapped_request
+
+    # Wrap the nested Response class
+    if hasattr(service_class, 'Response'):
+        wrapped_response = _create_message_wrapper(service_class.Response)
+        service_class.Response = wrapped_response
+
+        # Inject standalone Response alias: AddTwoIntsResponse
+        response_alias_name = f"{service_name}Response"
+        wrapped_attrs[response_alias_name] = wrapped_response
+
+    return service_class
 
 
 def _auto_populate_header(header):
