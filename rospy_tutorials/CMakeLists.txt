@@ -29,4 +29,16 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# Testing
+if(BUILD_TESTING)
+  find_package(launch_testing_ament_cmake REQUIRED)
+
+  add_launch_test(test/test_001_talker_listener.py TIMEOUT 30)
+  add_launch_test(test/test_001b_talker_timer.py TIMEOUT 30)
+  add_launch_test(test/test_002_header_messages.py TIMEOUT 30)
+  add_launch_test(test/test_005_add_two_ints.py TIMEOUT 30)
+  add_launch_test(test/test_006_parameters.py TIMEOUT 30)
+  add_launch_test(test/test_008_on_shutdown.py TIMEOUT 30)
+endif()
+
 ament_package()
