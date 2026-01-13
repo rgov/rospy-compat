@@ -38,8 +38,9 @@
 
 import sys
 
-import rospy_compat as rospy
+import rospy
 from rospy_tutorials.msg import HeaderString
+from std_msgs.msg import Header
 
 NAME = 'talker_header'
 
@@ -51,9 +52,10 @@ def talker_header():
     while not rospy.is_shutdown():
         str = 'hello world %s'%count
         print(str)
-        # If None is used as the header value, rospy will automatically
-        # fill it in.
-        pub.publish(HeaderString(None, str))
+        # Explicitly set header timestamp (ROS1 behavior - no auto-stamp)
+        header = Header()
+        header.stamp = rospy.Time.now()
+        pub.publish(HeaderString(header, str))
         count += 1
         rospy.sleep(0.1)
     

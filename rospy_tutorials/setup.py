@@ -13,7 +13,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools', 'rospy_compat'],
+    install_requires=['setuptools', 'rospy_too'],
     zip_safe=True,
     maintainer='Test Team',
     maintainer_email='rzg@example.com',

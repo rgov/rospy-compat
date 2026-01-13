@@ -36,7 +36,7 @@
 ## Simple talker demo that published std_msgs/Strings messages
 ## to the 'chatter' topic
 
-import rospy_compat as rospy
+import rospy
 from std_msgs.msg import String
 
 def talker():

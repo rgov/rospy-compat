@@ -36,7 +36,7 @@
 ## Simple talker demo that listens to std_msgs/Strings published 
 ## to the 'chatter' topic
 
-import rospy_compat as rospy
+import rospy
 from std_msgs.msg import String
 
 def callback(data):

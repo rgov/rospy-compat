@@ -5,7 +5,7 @@ Test for Tutorial 002: Messages with Headers
 
 Validates:
 - HeaderString custom messages can be published
-- Header timestamps are auto-populated (non-zero)
+- Header timestamps are set by the talker (matching ROS1 behavior)
 - ROS1-style positional arguments work (no errors)
 - Both nodes shut down cleanly
 
@@ -73,8 +73,9 @@ class TestHeaderMessages(unittest.TestCase):
         """
         Test that talker_header publishes HeaderString messages within 10 seconds.
 
-        Also validates that header timestamps are auto-populated (non-zero).
-        This confirms the import hook system is working correctly.
+        Also validates that header timestamps are set correctly by the talker.
+        Note: ROS1 behavior is that headers are NOT auto-stamped - the talker
+        must explicitly call header.stamp = rospy.Time.now().
 
         Foxy: Uses manual subscription + spinning.
         Humble+: Replace with WaitForTopics utility.
@@ -112,12 +113,12 @@ class TestHeaderMessages(unittest.TestCase):
         # Verify we got a message
         self.assertGreater(len(received_msg), 0, "No HeaderString messages received within 10 seconds")
 
-        # Verify header timestamp is non-zero (auto-populated by import hooks)
+        # Verify header timestamp is non-zero (explicitly set by talker)
         msg = received_msg[0]
         timestamp_nonzero = (msg.header.stamp.sec > 0 or msg.header.stamp.nanosec > 0)
         self.assertTrue(
             timestamp_nonzero,
-            f"Header timestamp was not auto-populated (sec={msg.header.stamp.sec}, nanosec={msg.header.stamp.nanosec})"
+            f"Header timestamp was not set by talker (sec={msg.header.stamp.sec}, nanosec={msg.header.stamp.nanosec})"
         )
 
 
