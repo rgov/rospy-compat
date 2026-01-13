@@ -33,6 +33,10 @@ run_noetic() {
             set -e
             source /opt/ros/noetic/setup.bash
 
+            echo "Installing test dependencies..."
+            apt-get update -qq && apt-get install -qq -y ros-noetic-actionlib ros-noetic-actionlib-msgs >/dev/null
+            source /opt/ros/noetic/setup.bash
+
             echo "Setting up workspace..."
             mkdir -p /ws/src/rospy_too_tests
 
@@ -96,6 +100,10 @@ run_foxy() {
                 set -e
                 source /opt/ros/foxy/setup.bash
 
+                echo "Installing test dependencies..."
+                apt-get update -qq && apt-get install -qq -y python3-pip ros-foxy-example-interfaces >/dev/null
+                source /opt/ros/foxy/setup.bash
+
                 echo "Setting up workspace..."
                 mkdir -p /ws/src/rospy_too_tests
                 mkdir -p /ws/src/rospy_too
@@ -116,27 +124,42 @@ run_foxy() {
                 source install/setup.bash
 
                 echo "Installing coverage and pytest..."
-                apt-get update -qq && apt-get install -qq -y python3-pip >/dev/null
                 python3 -m pip install -q coverage pytest
 
                 echo "Running tests with coverage..."
                 cd /ws/src/rospy_too_tests/scripts
-                python3 -m coverage run --parallel-mode --source=/ws/src/rospy_too/rospy --branch run_all.py
+
+                # Create .coveragerc for subprocess coverage
+                # Use build directory (where colcon installs packages)
+                cat > .coveragerc << EOF
+[run]
+branch = true
+parallel = true
+source = /ws/build/rospy_too/rospy,/ws/build/rospy_too/actionlib,/ws/build/rospy_too/actionlib_msgs
+EOF
+                # Enable subprocess coverage
+                export COVERAGE_PROCESS_START=/ws/src/rospy_too_tests/scripts/.coveragerc
+
+                # Add coverage pth file for automatic startup
+                SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])")
+                echo "import coverage; coverage.process_startup()" > "$SITE_PACKAGES/coverage_subprocess.pth"
+
+                python3 -m coverage run --rcfile=.coveragerc run_all.py
                 TEST_RESULT=$?
 
                 echo ""
                 echo "Combining coverage data from subprocesses..."
-                python3 -m coverage combine
+                python3 -m coverage combine --rcfile=.coveragerc
 
                 echo ""
                 echo "=========================================="
                 echo "Coverage Report"
                 echo "=========================================="
-                python3 -m coverage report
+                python3 -m coverage report --rcfile=.coveragerc
 
                 echo "Generating HTML report..."
-                python3 -m coverage html -d /mnt/coverage/html
-                python3 -m coverage xml -o /mnt/coverage/coverage.xml
+                python3 -m coverage html --rcfile=.coveragerc -d /mnt/coverage/html
+                python3 -m coverage xml --rcfile=.coveragerc -o /mnt/coverage/coverage.xml
 
                 exit $TEST_RESULT
             '
@@ -148,6 +171,10 @@ run_foxy() {
             docker.io/ros:foxy \
             bash -c '
                 set -e
+                source /opt/ros/foxy/setup.bash
+
+                echo "Installing test dependencies..."
+                apt-get update -qq && apt-get install -qq -y python3-pip ros-foxy-example-interfaces >/dev/null
                 source /opt/ros/foxy/setup.bash
 
                 echo "Setting up workspace..."
@@ -170,7 +197,6 @@ run_foxy() {
                 source install/setup.bash
 
                 echo "Installing pytest..."
-                apt-get update -qq && apt-get install -qq -y python3-pip >/dev/null
                 python3 -m pip install -q pytest
 
                 echo "Running tests..."
@@ -214,6 +240,10 @@ run_rolling() {
                 set -e
                 source /opt/ros/rolling/setup.bash
 
+                echo "Installing test dependencies..."
+                apt-get update -qq && apt-get install -qq -y python3-pip ros-rolling-example-interfaces >/dev/null
+                source /opt/ros/rolling/setup.bash
+
                 echo "Setting up workspace..."
                 mkdir -p /ws/src/rospy_too_tests
                 mkdir -p /ws/src/rospy_too
@@ -234,27 +264,42 @@ run_rolling() {
                 source install/setup.bash
 
                 echo "Installing coverage and pytest..."
-                apt-get update -qq && apt-get install -qq -y python3-pip >/dev/null
                 python3 -m pip install -q --break-system-packages coverage pytest
 
                 echo "Running tests with coverage..."
                 cd /ws/src/rospy_too_tests/scripts
-                python3 -m coverage run --parallel-mode --source=/ws/src/rospy_too/rospy --branch run_all.py
+
+                # Create .coveragerc for subprocess coverage
+                # Use build directory (where colcon installs packages)
+                cat > .coveragerc << EOF
+[run]
+branch = true
+parallel = true
+source = /ws/build/rospy_too/rospy,/ws/build/rospy_too/actionlib,/ws/build/rospy_too/actionlib_msgs
+EOF
+                # Enable subprocess coverage
+                export COVERAGE_PROCESS_START=/ws/src/rospy_too_tests/scripts/.coveragerc
+
+                # Add coverage pth file for automatic startup
+                SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])")
+                echo "import coverage; coverage.process_startup()" > "$SITE_PACKAGES/coverage_subprocess.pth"
+
+                python3 -m coverage run --rcfile=.coveragerc run_all.py
                 TEST_RESULT=$?
 
                 echo ""
                 echo "Combining coverage data from subprocesses..."
-                python3 -m coverage combine
+                python3 -m coverage combine --rcfile=.coveragerc
 
                 echo ""
                 echo "=========================================="
                 echo "Coverage Report"
                 echo "=========================================="
-                python3 -m coverage report
+                python3 -m coverage report --rcfile=.coveragerc
 
                 echo "Generating HTML report..."
-                python3 -m coverage html -d /mnt/coverage/html
-                python3 -m coverage xml -o /mnt/coverage/coverage.xml
+                python3 -m coverage html --rcfile=.coveragerc -d /mnt/coverage/html
+                python3 -m coverage xml --rcfile=.coveragerc -o /mnt/coverage/coverage.xml
 
                 exit $TEST_RESULT
             '
@@ -266,6 +311,10 @@ run_rolling() {
             docker.io/ros:rolling \
             bash -c '
                 set -e
+                source /opt/ros/rolling/setup.bash
+
+                echo "Installing test dependencies..."
+                apt-get update -qq && apt-get install -qq -y python3-pip ros-rolling-example-interfaces >/dev/null
                 source /opt/ros/rolling/setup.bash
 
                 echo "Setting up workspace..."
@@ -288,7 +337,6 @@ run_rolling() {
                 source install/setup.bash
 
                 echo "Installing pytest..."
-                apt-get update -qq && apt-get install -qq -y python3-pip >/dev/null
                 python3 -m pip install -q --break-system-packages pytest
 
                 echo "Running tests..."

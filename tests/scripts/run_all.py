@@ -23,6 +23,7 @@ TEST_MODULES = [
     'test_services',
     'test_timer',
     'test_anymsg',
+    'test_actionlib',
     'test_shutdown',
 ]
 
@@ -51,7 +52,16 @@ def run_module_subprocess(module_name):
     print('=' * 60)
 
     env = os.environ.copy()
-    cmd = [sys.executable, __file__, '--run', module_name]
+
+    # For coverage subprocess tracking, run via coverage run --append
+    coverage_rc = os.environ.get('COVERAGE_PROCESS_START')
+    if coverage_rc:
+        # Run via coverage to track this subprocess
+        cmd = [sys.executable, '-m', 'coverage', 'run', '--parallel-mode',
+               '--rcfile=' + coverage_rc,
+               os.path.join(SCRIPT_DIR, module_name + '.py')]
+    else:
+        cmd = [sys.executable, __file__, '--run', module_name]
 
     try:
         result = subprocess.run(

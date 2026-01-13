@@ -6,6 +6,8 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   std_srvs
   geometry_msgs
+  actionlib
+  actionlib_msgs
 )
 
 catkin_package()
@@ -20,6 +22,7 @@ catkin_install_python(PROGRAMS
   scripts/test_messages.py
   scripts/test_pubsub.py
   scripts/test_services.py
+  scripts/test_actionlib.py
   scripts/run_all.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

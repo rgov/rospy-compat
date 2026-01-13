@@ -51,7 +51,10 @@ def _is_node_initialized():
 def _setup_executor():
     global _executor, _executor_thread
     if _executor is None:
-        _executor = rclpy.executors.SingleThreadedExecutor()
+        # Use MultiThreadedExecutor to allow concurrent callback processing.
+        # This is needed for actionlib where execute_cb may block while
+        # other callbacks (goal response, cancel) need to be processed.
+        _executor = rclpy.executors.MultiThreadedExecutor()
         _executor.add_node(_node)
         _executor_thread = threading.Thread(target=_spin_executor, daemon=True)
         _executor_thread.start()
