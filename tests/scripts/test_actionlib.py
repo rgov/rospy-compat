@@ -712,6 +712,49 @@ def test_goal_callback_pattern():
     print("OK: goal_callback_pattern")
 
 
+def test_ros1_action_import_from_msg():
+    """Test ROS1-style action imports from package.msg (ROS2 only)."""
+    if not is_ros2():
+        print("SKIP: test_ros1_action_import_from_msg (ROS1)")
+        return
+
+    setup()
+
+    # Clear cached module to force reimport with hooks
+    import sys
+    if 'example_interfaces.msg' in sys.modules:
+        del sys.modules['example_interfaces.msg']
+
+    # ROS1-style import from .msg
+    from example_interfaces.msg import FibonacciAction, FibonacciGoal, FibonacciResult, FibonacciFeedback
+
+    # Verify aliases work
+    assert FibonacciAction is not None, "FibonacciAction not found"
+
+    # Test positional arg support on Goal
+    goal = FibonacciGoal(5)
+    assert goal.order == 5, "FibonacciGoal positional arg failed"
+
+    # Test keyword arg still works
+    goal2 = FibonacciGoal(order=10)
+    assert goal2.order == 10, "FibonacciGoal keyword arg failed"
+
+    result = FibonacciResult()
+    assert hasattr(result, 'sequence'), "FibonacciResult missing sequence"
+
+    feedback = FibonacciFeedback()
+    assert hasattr(feedback, 'sequence'), "FibonacciFeedback missing sequence"
+
+    # Verify Action aliases map correctly
+    from example_interfaces.action import Fibonacci
+    assert FibonacciAction is Fibonacci, "FibonacciAction should be Fibonacci"
+    assert FibonacciGoal is Fibonacci.Goal, "FibonacciGoal should be Fibonacci.Goal"
+    assert FibonacciResult is Fibonacci.Result, "FibonacciResult should be Fibonacci.Result"
+    assert FibonacciFeedback is Fibonacci.Feedback, "FibonacciFeedback should be Fibonacci.Feedback"
+
+    print("OK: ROS1-style action import from msg")
+
+
 def main():
     failed = 0
 
@@ -735,6 +778,7 @@ def main():
         test_cancel_methods,
         test_register_goal_callback_with_execute_cb,
         test_goal_callback_pattern,
+        test_ros1_action_import_from_msg,
     ]
 
     for test in tests:

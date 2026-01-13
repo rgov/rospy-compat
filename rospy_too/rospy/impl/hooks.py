@@ -77,6 +77,12 @@ class MessageImportLoader(Loader):
             for meta in ('__file__', '__package__', '__path__', '__doc__'):
                 if hasattr(original_module, meta):
                     setattr(module, meta, getattr(original_module, meta))
+
+            # Inject action aliases for .msg modules (ROS1 compatibility)
+            parts = fullname.split('.')
+            if len(parts) >= 2 and parts[-1] == 'msg':
+                package_name = '.'.join(parts[:-1])
+                _inject_action_aliases(module, package_name)
         finally:
             sys.meta_path = original_meta_path
             # Ensure our wrapped module is in sys.modules
@@ -131,6 +137,13 @@ def _wrap_message_module(original_module):
     for meta in ('__file__', '__package__', '__path__', '__doc__'):
         if hasattr(original_module, meta):
             setattr(wrapped_module, meta, getattr(original_module, meta))
+
+    # Inject action aliases for .msg modules (ROS1 compatibility)
+    fullname = original_module.__name__
+    parts = fullname.split('.')
+    if len(parts) >= 2 and parts[-1] == 'msg':
+        package_name = '.'.join(parts[:-1])
+        _inject_action_aliases(wrapped_module, package_name)
 
     return wrapped_module
 
@@ -271,6 +284,39 @@ def _wrap_action_type(action_name, action_class, wrapped_attrs):
         wrapped_attrs[f'{action_name}Feedback'] = wrapped_feedback
 
     return action_class
+
+
+def _inject_action_aliases(module, package_name):
+    """Inject ROS1-style action aliases into a msg module.
+
+    In ROS1, action files generate types in package.msg:
+        from package.msg import FooAction, FooGoal, FooResult, FooFeedback
+
+    In ROS2, action files generate types in package.action:
+        from package.action import Foo  # then Foo.Goal, Foo.Result, etc.
+
+    This function bridges the gap by adding ROS1-style aliases to msg modules.
+    """
+    try:
+        action_module = importlib.import_module(f'{package_name}.action')
+    except ImportError:
+        return  # No action module, nothing to do
+
+    for attr_name in dir(action_module):
+        attr = getattr(action_module, attr_name)
+        if _is_action_type(attr):
+            # Wrap the action type's Goal/Result/Feedback for positional args
+            _wrap_action_type(attr_name, attr, module.__dict__)
+
+            # Add ROS1-style aliases
+            module.__dict__[f'{attr_name}Action'] = attr
+            module.__dict__[f'{attr_name}Goal'] = attr.Goal
+            module.__dict__[f'{attr_name}Result'] = attr.Result
+            module.__dict__[f'{attr_name}Feedback'] = attr.Feedback
+            # ActionGoal/ActionResult/ActionFeedback are just aliases in compat mode
+            module.__dict__[f'{attr_name}ActionGoal'] = attr.Goal
+            module.__dict__[f'{attr_name}ActionResult'] = attr.Result
+            module.__dict__[f'{attr_name}ActionFeedback'] = attr.Feedback
 
 
 def install_message_hooks():
