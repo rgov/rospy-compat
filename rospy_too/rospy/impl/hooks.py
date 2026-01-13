@@ -10,12 +10,12 @@ from importlib.machinery import ModuleSpec
 
 
 def _is_message_module(fullname):
-    # Match pkg.msg or pkg.srv patterns (exact component match, not substring)
+    # Match pkg.msg, pkg.srv, or pkg.action patterns (exact component match, not substring)
     parts = fullname.split('.')
     if len(parts) < 2:
         return False
     for i in range(1, len(parts)):
-        if parts[i] == 'msg' or parts[i] == 'srv':
+        if parts[i] in ('msg', 'srv', 'action'):
             return True
     return False
 
@@ -59,7 +59,10 @@ class MessageImportLoader(Loader):
             for attr_name in dir(original_module):
                 attr = getattr(original_module, attr_name)
 
-                if _is_service_type(attr):
+                if _is_action_type(attr):
+                    _wrap_action_type(attr_name, attr, module.__dict__)
+                    setattr(module, attr_name, attr)
+                elif _is_service_type(attr):
                     _wrap_service_type(attr_name, attr, module.__dict__)
                     setattr(module, attr_name, attr)
                 elif isinstance(attr, type) and hasattr(
@@ -106,7 +109,11 @@ def _wrap_message_module(original_module):
     for attr_name in dir(original_module):
         attr = getattr(original_module, attr_name)
 
-        if _is_service_type(attr):
+        if _is_action_type(attr):
+            wrapped_attrs[attr_name] = _wrap_action_type(
+                attr_name, attr, wrapped_attrs
+            )
+        elif _is_service_type(attr):
             wrapped_attrs[attr_name] = _wrap_service_type(
                 attr_name, attr, wrapped_attrs
             )
@@ -218,6 +225,21 @@ def _is_service_type(attr):
     )
 
 
+def _is_action_type(attr):
+    return (
+        isinstance(attr, type)
+        and hasattr(attr, 'Goal')
+        and hasattr(attr, 'Result')
+        and hasattr(attr, 'Feedback')
+        and isinstance(attr.Goal, type)
+        and isinstance(attr.Result, type)
+        and isinstance(attr.Feedback, type)
+        and hasattr(attr.Goal, '_fields_and_field_types')
+        and hasattr(attr.Result, '_fields_and_field_types')
+        and hasattr(attr.Feedback, '_fields_and_field_types')
+    )
+
+
 def _wrap_service_type(service_name, service_class, wrapped_attrs):
     if hasattr(service_class, 'Request'):
         wrapped_request = _create_message_wrapper(service_class.Request)
@@ -230,6 +252,25 @@ def _wrap_service_type(service_name, service_class, wrapped_attrs):
         wrapped_attrs[f'{service_name}Response'] = wrapped_response
 
     return service_class
+
+
+def _wrap_action_type(action_name, action_class, wrapped_attrs):
+    if hasattr(action_class, 'Goal'):
+        wrapped_goal = _create_message_wrapper(action_class.Goal)
+        action_class.Goal = wrapped_goal
+        wrapped_attrs[f'{action_name}Goal'] = wrapped_goal
+
+    if hasattr(action_class, 'Result'):
+        wrapped_result = _create_message_wrapper(action_class.Result)
+        action_class.Result = wrapped_result
+        wrapped_attrs[f'{action_name}Result'] = wrapped_result
+
+    if hasattr(action_class, 'Feedback'):
+        wrapped_feedback = _create_message_wrapper(action_class.Feedback)
+        action_class.Feedback = wrapped_feedback
+        wrapped_attrs[f'{action_name}Feedback'] = wrapped_feedback
+
+    return action_class
 
 
 def install_message_hooks():
