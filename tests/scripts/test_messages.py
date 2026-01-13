@@ -169,6 +169,88 @@ def test_header_stamp_not_auto_populated():
     print('OK: Explicit header stamp remains zero (not auto-populated)')
 
 
+def is_ros2():
+    try:
+        import rclpy
+        return True
+    except ImportError:
+        return False
+
+
+def test_time_duration_positional_args():
+    """Test Time/Duration construction with positional arguments (ROS2 hook coverage)."""
+    if not is_ros2():
+        print("SKIP: test_time_duration_positional_args (ROS1)")
+        return
+
+    setup()
+
+    from builtin_interfaces.msg import Time, Duration
+
+    # Test Time with single float arg (covers _float_to_sec_nanosec)
+    t = Time(1.5)
+    assert t.sec == 1, "Expected sec=1, got %s" % t.sec
+    assert t.nanosec == 500000000, "Expected nanosec=500000000, got %s" % t.nanosec
+    print("OK: Time(1.5) positional float")
+
+    # Test Time with two positional args
+    t2 = Time(10, 123456789)
+    assert t2.sec == 10, "Expected sec=10, got %s" % t2.sec
+    assert t2.nanosec == 123456789, "Expected nanosec=123456789, got %s" % t2.nanosec
+    print("OK: Time(10, 123456789) positional")
+
+    # Test Duration with single float arg
+    d = Duration(2.25)
+    assert d.sec == 2, "Expected sec=2, got %s" % d.sec
+    assert d.nanosec == 250000000, "Expected nanosec=250000000, got %s" % d.nanosec
+    print("OK: Duration(2.25) positional float")
+
+    # Test Duration with two positional args
+    d2 = Duration(5, 999999999)
+    assert d2.sec == 5, "Expected sec=5, got %s" % d2.sec
+    assert d2.nanosec == 999999999, "Expected nanosec=999999999, got %s" % d2.nanosec
+    print("OK: Duration(5, 999999999) positional")
+
+
+def test_header_none_autofill():
+    """Test that None for header fields gets auto-filled (ROS2 hook coverage)."""
+    if not is_ros2():
+        print("SKIP: test_header_none_autofill (ROS1)")
+        return
+
+    setup()
+
+    from geometry_msgs.msg import PointStamped
+    from std_msgs.msg import Header
+
+    # Pass None as first positional arg (header field) - should auto-create Header
+    msg = PointStamped(None)
+    assert msg.header is not None, "Expected header to be auto-created"
+    assert isinstance(msg.header, Header), "Expected Header type"
+    print("OK: Header None autofill")
+
+
+def test_message_wrapper_idempotency():
+    """Test that wrapping a message twice is idempotent (ROS2 hook coverage)."""
+    if not is_ros2():
+        print("SKIP: test_message_wrapper_idempotency (ROS1)")
+        return
+
+    setup()
+
+    from std_msgs.msg import String
+
+    # String should be marked as wrapped
+    assert hasattr(String, '_rospy_wrapped'), "Expected _rospy_wrapped attribute"
+    assert String._rospy_wrapped is True, "Expected _rospy_wrapped=True"
+
+    # Calling wrapper again should return same class
+    from rospy.impl.hooks import _create_message_wrapper
+    wrapped = _create_message_wrapper(String)
+    assert wrapped is String, "Expected same class on re-wrap"
+    print("OK: Message wrapper idempotency")
+
+
 def main():
     failed = 0
 
@@ -180,6 +262,9 @@ def main():
         test_complex_message,
         test_nested_message,
         test_header_stamp_not_auto_populated,
+        test_time_duration_positional_args,
+        test_header_none_autofill,
+        test_message_wrapper_idempotency,
     ]
 
     for test in tests:

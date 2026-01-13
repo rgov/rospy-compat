@@ -396,6 +396,42 @@ def test_action_utils():
     print("OK: action_utils")
 
 
+def test_action_positional_args():
+    """Test that action Goal/Result/Feedback support positional arguments (ROS2 only)."""
+    if not is_ros2():
+        print("SKIP: test_action_positional_args (ROS1)")
+        return
+
+    # Must import rospy first to install import hooks
+    setup()
+
+    # Import action AFTER rospy to get wrapped classes
+    # Need to force reimport since it might have been imported earlier without hooks
+    import sys
+    if 'example_interfaces.action' in sys.modules:
+        del sys.modules['example_interfaces.action']
+
+    from example_interfaces.action import Fibonacci
+
+    # Test Goal with positional arg
+    goal = Fibonacci.Goal(5)
+    assert goal.order == 5, "Goal positional arg failed: order=%s" % goal.order
+
+    # Test Goal with keyword arg (should still work)
+    goal2 = Fibonacci.Goal(order=10)
+    assert goal2.order == 10
+
+    # Test Result with positional arg
+    result = Fibonacci.Result([1, 2, 3])
+    assert list(result.sequence) == [1, 2, 3], "Result positional arg failed: sequence=%s" % list(result.sequence)
+
+    # Test Feedback with positional arg
+    feedback = Fibonacci.Feedback([0, 1, 1])
+    assert list(feedback.sequence) == [0, 1, 1], "Feedback positional arg failed: sequence=%s" % list(feedback.sequence)
+
+    print("OK: action_positional_args")
+
+
 def test_server_error_paths():
     """Test server error paths when no active goal (ROS2 only)."""
     if not is_ros2():
@@ -691,6 +727,7 @@ def main():
         # Coverage improvement tests
         test_actionlib_msgs_classes,
         test_action_utils,
+        test_action_positional_args,
         test_server_error_paths,
         test_active_callback,
         test_send_goal_and_wait_timeout,
