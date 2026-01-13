@@ -136,6 +136,7 @@ run_foxy() {
 branch = true
 parallel = true
 source = /ws/build/rospy_too/rospy,/ws/build/rospy_too/actionlib,/ws/build/rospy_too/actionlib_msgs
+omit = */genpy/rostime.py
 EOF
                 # Enable subprocess coverage
                 export COVERAGE_PROCESS_START=/ws/src/rospy_too_tests/scripts/.coveragerc
@@ -276,6 +277,7 @@ run_rolling() {
 branch = true
 parallel = true
 source = /ws/build/rospy_too/rospy,/ws/build/rospy_too/actionlib,/ws/build/rospy_too/actionlib_msgs
+omit = */genpy/rostime.py
 EOF
                 # Enable subprocess coverage
                 export COVERAGE_PROCESS_START=/ws/src/rospy_too_tests/scripts/.coveragerc
