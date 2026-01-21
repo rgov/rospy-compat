@@ -8,6 +8,27 @@ import types
 from importlib.abc import Loader, MetaPathFinder
 from importlib.machinery import ModuleSpec
 
+from ..logging import logwarn_once
+
+
+# Try to import module, falling back to _msgs/_interfaces suffixed packages.
+# ROS2 strongly encourages messages to be split into separate packages.
+# This allows imports from the 'parent' package to continue to work.
+def import_module_with_fallback_names(fullname):
+    try:
+        return importlib.import_module(fullname)
+    except ModuleNotFoundError:
+        parts = fullname.split('.')
+        for suffix in ('_msgs', '_interfaces'):
+            fallback = f"{'.'.join(parts[:-1])}{suffix}.{parts[-1]}"
+            try:
+                module = importlib.import_module(fallback)
+                logwarn_once("Remapped import '%s' to '%s'", fullname, fallback)
+                return module
+            except ModuleNotFoundError:
+                continue
+        raise
+
 
 def _is_message_module(fullname):
     # Match pkg.msg, pkg.srv, or pkg.action patterns (exact component match, not substring)
@@ -53,7 +74,7 @@ class MessageImportLoader(Loader):
         ]
 
         try:
-            original_module = importlib.import_module(fullname)
+            original_module = import_module_with_fallback_names(fullname)
 
             # Wrap message classes
             for attr_name in dir(original_module):
@@ -100,7 +121,7 @@ class MessageImportLoader(Loader):
         ]
 
         try:
-            original_module = importlib.import_module(fullname)
+            original_module = import_module_with_fallback_names(fullname)
         finally:
             sys.meta_path = original_meta_path
 

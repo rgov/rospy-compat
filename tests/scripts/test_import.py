@@ -195,6 +195,28 @@ def test_service_exception():
     print('OK: ServiceException')
 
 
+def test_import_fallback_logic():
+    try:
+        from rospy.impl.hooks import import_module_with_fallback_names
+    except ImportError:
+        print('SKIP: import_fallback_logic (ROS1)')
+        return
+
+    # Test that direct import works (std_msgs.msg exists)
+    import std_msgs.msg
+    mod = import_module_with_fallback_names('std_msgs.msg')
+    assert mod is not None
+    print('OK: import fallback - direct import works')
+
+    # Test that non-existent package raises ModuleNotFoundError
+    try:
+        import_module_with_fallback_names('nonexistent_pkg_xyz.msg')
+        assert False, 'Should have raised ModuleNotFoundError'
+    except ModuleNotFoundError:
+        pass
+    print('OK: import fallback - raises for missing packages')
+
+
 def main():
     failed = 0
 
@@ -208,6 +230,7 @@ def main():
         test_ros_serialization_exception,
         test_ros_time_moved_backwards_exception,
         test_service_exception,
+        test_import_fallback_logic,
     ]
 
     for test in tests:
