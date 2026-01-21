@@ -417,6 +417,59 @@ def test_search_param_upward_finds_root():
     print("OK: search_param upward finds root")
 
 
+def test_list_of_dicts_param():
+    """Verify list of dicts can be set and retrieved correctly."""
+    import rospy
+    setup()
+
+    # Set list of dicts
+    value = [{"a": 1}, {"a": 2}]
+    rospy.set_param("/test/list_of_dicts", value)
+
+    # Get it back
+    result = rospy.get_param("/test/list_of_dicts")
+    assert result == value, "Expected %s, got %s" % (value, result)
+
+    print("OK: list of dicts param")
+
+
+def test_nested_list_param():
+    """Verify dict containing list can be set and retrieved correctly."""
+    import rospy
+    setup()
+
+    # Set dict with nested list
+    value = {"items": [1, 2, 3]}
+    rospy.set_param("/test/nested_list", value)
+
+    # Get it back
+    result = rospy.get_param("/test/nested_list")
+    assert result == value, "Expected %s, got %s" % (value, result)
+
+    print("OK: nested list param")
+
+
+def test_list_of_dicts_slash_access():
+    """Verify list elements are accessible via slash paths."""
+    import rospy
+    setup()
+
+    # Set list of dicts
+    rospy.set_param("/test/list_slash", [{"a": 1}, {"a": 2}])
+
+    # Access individual elements via slash paths
+    assert rospy.has_param("/test/list_slash/0/a"), (
+        "List element should be accessible via /test/list_slash/0/a"
+    )
+    val = rospy.get_param("/test/list_slash/0/a")
+    assert val == 1, "Expected 1, got %s" % val
+
+    val = rospy.get_param("/test/list_slash/1/a")
+    assert val == 2, "Expected 2, got %s" % val
+
+    print("OK: list of dicts slash access")
+
+
 def main():
     failed = 0
 
@@ -441,6 +494,9 @@ def main():
         test_get_param_names_excludes_deleted,
         test_get_param_names_slash_format,
         test_search_param_upward_finds_root,
+        test_list_of_dicts_param,
+        test_nested_list_param,
+        test_list_of_dicts_slash_access,
     ]
 
     for test in tests:

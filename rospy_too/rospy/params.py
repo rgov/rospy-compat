@@ -44,6 +44,25 @@ def _insert_nested_value(d, key_path, value):
     d[keys[-1]] = value
 
 
+def _maybe_convert_to_list(obj):
+    if not isinstance(obj, dict):
+        return obj
+    # Recursively convert children first
+    for k, v in obj.items():
+        obj[k] = _maybe_convert_to_list(v)
+    # Check if all keys are consecutive integers 0..n
+    keys = list(obj.keys())
+    if not keys:
+        return obj
+    try:
+        int_keys = [int(k) for k in keys]
+    except ValueError:
+        return obj
+    if sorted(int_keys) == list(range(len(int_keys))):
+        return [obj[str(i)] for i in range(len(int_keys))]
+    return obj
+
+
 def _construct_namespace_dict(node, prefix):
     params = node.get_parameters_by_prefix(prefix)
     if not params:
@@ -51,7 +70,9 @@ def _construct_namespace_dict(node, prefix):
     result = {}
     for rel_name, param in params.items():
         _insert_nested_value(result, rel_name, param.value)
-    return result or None
+    if not result:
+        return None
+    return _maybe_convert_to_list(result)
 
 
 def get_param(param_name, default=_unspecified):
@@ -79,13 +100,17 @@ def get_param(param_name, default=_unspecified):
     raise KeyError(param_name)
 
 
-def _flatten_dict(prefix, d, result):
-    for key, value in d.items():
-        full_key = f'{prefix}.{key}' if prefix else key
-        if isinstance(value, dict):
-            _flatten_dict(full_key, value, result)
-        else:
-            result[full_key] = value
+def _flatten_value(prefix, value, result):
+    if isinstance(value, dict):
+        for key, v in value.items():
+            full_key = f'{prefix}.{key}' if prefix else key
+            _flatten_value(full_key, v, result)
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            full_key = f'{prefix}.{i}' if prefix else str(i)
+            _flatten_value(full_key, item, result)
+    else:
+        result[prefix] = value
 
 
 def set_param(param_name, value):
@@ -95,10 +120,10 @@ def set_param(param_name, value):
     # Clear delete mask on set
     _deleted_params.discard(name)
 
-    # Handle dict values by flattening
-    if isinstance(value, dict):
+    # Handle dict and list values by flattening
+    if isinstance(value, (dict, list)):
         flat_params = {}
-        _flatten_dict(name, value, flat_params)
+        _flatten_value(name, value, flat_params)
         for flat_name, flat_value in flat_params.items():
             if not node.has_parameter(flat_name):
                 node.declare_parameter(flat_name, flat_value)
