@@ -11,21 +11,13 @@ from .impl.pending import register_node_init_callback
 from .impl.qos import create_qos_profile
 from .logging import logwarn
 from .msg import AnyMsg
+from .names import resolve_name
 
 # Try to import SerializedMessage (rolling/humble+), fall back to raw=True (foxy+)
 try:
     from rclpy.serialization import SerializedMessage
 except ImportError:
     SerializedMessage = None
-
-
-def _resolve_topic(node, name):
-    # Resolve topic name using rclpy's resolver with fallback
-    try:
-        return node.resolve_topic_name(name, only_expand=False)
-    except (AttributeError, Exception):
-        from .names import resolve_name
-        return resolve_name(name)
 
 
 class SubscribeListener:
@@ -62,7 +54,7 @@ class Publisher:
         register_node_init_callback(self)
 
     def _after_node_init(self, node):
-        resolved = _resolve_topic(node, self._topic)
+        resolved = resolve_name(self._topic)
         qos = create_qos_profile(queue_size=self._queue_size, latch=self._latch)
         self._publisher = node.create_publisher(self._msg_type, resolved, qos)
 
@@ -136,7 +128,7 @@ class Subscriber:
         register_node_init_callback(self)
 
     def _after_node_init(self, node):
-        resolved = _resolve_topic(node, self._topic)
+        resolved = resolve_name(self._topic)
         if self._msg_type is AnyMsg:
             self._subscription = _create_anymsg_subscription(
                 node, resolved, self._invoke_callbacks, None, self._queue_size

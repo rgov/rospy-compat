@@ -117,6 +117,32 @@ def test_resolve_name_with_caller_id():
     print("OK: resolve_name with caller_id (private)")
 
 
+def test_resolve_name_normalization():
+    """Verify resolve_name handles ROS1 name edge cases."""
+    import rospy
+
+    # Test ~/foo quirk: rospy resolves ~/foo to /foo (bug in ns_join)
+    resolved = rospy.resolve_name("~/foo")
+    assert resolved == "/foo", (
+        "Expected /foo (rospy quirk), got %s" % resolved
+    )
+    print("OK: resolve_name ~/foo quirk")
+
+    # Test double slash normalization: foo//bar -> foo/bar
+    resolved = rospy.resolve_name("foo//bar")
+    assert resolved == "/foo/bar", (
+        "Expected /foo/bar, got %s" % resolved
+    )
+    print("OK: resolve_name double slash normalization")
+
+    # Test trailing slash normalization: topic/ -> topic
+    resolved = rospy.resolve_name("topic/")
+    assert resolved == "/topic", (
+        "Expected /topic, got %s" % resolved
+    )
+    print("OK: resolve_name trailing slash normalization")
+
+
 def test_myargv_filters_remappings():
     # myargv strips ROS-specific arguments from argv
     import rospy
@@ -280,6 +306,7 @@ def main():
         test_resolve_name,
         test_resolve_name_private,
         test_resolve_name_with_caller_id,
+        test_resolve_name_normalization,
         test_myargv_filters_remappings,
         test_is_shutdown,
         test_get_time,
