@@ -449,25 +449,45 @@ def test_nested_list_param():
     print("OK: nested list param")
 
 
-def test_list_of_dicts_slash_access():
-    """Verify list elements are accessible via slash paths."""
+def test_list_index_access_blocked():
+    """Verify list elements are NOT accessible via slash paths (ROS1 behavior).
+
+    In ROS1, lists are atomic values. You can access /list to get the full list,
+    but NOT /list/0 to get an element. This matches ROS1 parameter server behavior.
+    """
     import rospy
     setup()
+
+    # ROS2 only test
+    try:
+        from rospy.params import _deleted_params  # noqa: F401
+    except ImportError:
+        print("SKIP: test_list_index_access_blocked (ROS1)")
+        return
 
     # Set list of dicts
     rospy.set_param("/test/list_slash", [{"a": 1}, {"a": 2}])
 
-    # Access individual elements via slash paths
-    assert rospy.has_param("/test/list_slash/0/a"), (
-        "List element should be accessible via /test/list_slash/0/a"
+    # In ROS1, lists are atomic - can't access elements via slash paths
+    assert not rospy.has_param("/test/list_slash/0"), (
+        "List element should NOT be accessible via /test/list_slash/0"
     )
-    val = rospy.get_param("/test/list_slash/0/a")
-    assert val == 1, "Expected 1, got %s" % val
+    assert not rospy.has_param("/test/list_slash/0/a"), (
+        "List element should NOT be accessible via /test/list_slash/0/a"
+    )
 
-    val = rospy.get_param("/test/list_slash/1/a")
-    assert val == 2, "Expected 2, got %s" % val
+    # get_param should return default or raise KeyError
+    val = rospy.get_param("/test/list_slash/0/a", "default")
+    assert val == "default", "Expected 'default' for list index access, got %s" % val
 
-    print("OK: list of dicts slash access")
+    with pytest.raises(KeyError):
+        rospy.get_param("/test/list_slash/0/a")
+
+    # But the full list should still be accessible
+    result = rospy.get_param("/test/list_slash")
+    assert result == [{"a": 1}, {"a": 2}], "Expected list, got %s" % result
+
+    print("OK: list index access blocked (ROS1 behavior)")
 
 
 def main():
@@ -496,7 +516,7 @@ def main():
         test_search_param_upward_finds_root,
         test_list_of_dicts_param,
         test_nested_list_param,
-        test_list_of_dicts_slash_access,
+        test_list_index_access_blocked,
     ]
 
     for test in tests:

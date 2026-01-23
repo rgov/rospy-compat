@@ -75,12 +75,36 @@ def _construct_namespace_dict(node, prefix):
     return _maybe_convert_to_list(result)
 
 
+def _is_list_index_path(node, name):
+    # Check if the path accesses a list element via numeric index.
+    # In ROS1, lists are atomic - you can access /list but NOT /list/0.
+    # This function detects if any path component is a numeric index into a list.
+    parts = name.split('.')
+
+    # Check each numeric component
+    for i, part in enumerate(parts):
+        if part.isdigit():
+            # This is a numeric index - check if the prefix resolves to a list
+            prefix = '.'.join(parts[:i])
+            if prefix:  # Only check if there's actually a prefix
+                ns_dict = _construct_namespace_dict(node, prefix)
+                if isinstance(ns_dict, list):
+                    return True
+    return False
+
+
 def get_param(param_name, default=_unspecified):
     node = _get_node()
     name = _normalize(param_name)
 
     # Check delete mask
     if name in _deleted_params:
+        if default is not _unspecified:
+            return default
+        raise KeyError(param_name)
+
+    # Check if path tries to access list element (not allowed in ROS1)
+    if _is_list_index_path(node, name):
         if default is not _unspecified:
             return default
         raise KeyError(param_name)
@@ -139,12 +163,17 @@ def set_param(param_name, value):
 
 def has_param(param_name):
     name = _normalize(param_name)
+    node = _get_node()
 
     # Check delete mask
     if name in _deleted_params:
         return False
 
-    return _get_node().has_parameter(name)
+    # Check if path tries to access list element (not allowed in ROS1)
+    if _is_list_index_path(node, name):
+        return False
+
+    return node.has_parameter(name)
 
 
 def delete_param(param_name):
@@ -174,7 +203,9 @@ def search_param(param_name):
 
     # Search from most specific to least specific
     while True:
-        candidate = '/' + '/'.join(parts + [param_name]) if parts else '/' + param_name
+        candidate = (
+            '/' + '/'.join(parts + [param_name]) if parts else '/' + param_name
+        )
         if has_param(candidate):
             return candidate
         if not parts:
@@ -188,4 +219,6 @@ def get_param_names():
     node = _get_node()
     names = node.list_parameters([], 0).names
     # Filter deleted and convert dots to slashes for ROS1 compatibility
-    return ['/' + n.replace('.', '/') for n in names if n not in _deleted_params]
+    return [
+        '/' + n.replace('.', '/') for n in names if n not in _deleted_params
+    ]
