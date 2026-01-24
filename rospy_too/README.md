@@ -86,6 +86,12 @@ from std_msgs.msg import Header
 import rospy  # Too late, Header wasn't wrapped
 ```
 
+### uint8[] Fields
+
+**`uint8[]` and `char[]` fields are coerced to `bytes` on read.** ROS 1 stores these as Python `bytes`, but ROS 2 may return `list` or `array.array`. For compatibility, reading these fields always returns `bytes`.
+
+**`numpy.ndarray` assignment requires explicit conversion.** ROS 1 accepts numpy arrays for `uint8[]` fields, but this layer requires explicit conversion: `msg.data = arr.tobytes()`.
+
 ## Not Implemented
 
 - `rospy.wait_for_time()` - no sim time support

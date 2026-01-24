@@ -251,6 +251,75 @@ def test_message_wrapper_idempotency():
     print("OK: Message wrapper idempotency")
 
 
+def test_int_to_float_coercion():
+    """Test assigning int to float field is coerced to float (ROS1 genpy compatibility).
+
+    ROS1's genpy allows int values for float fields (coerced at serialization).
+    ROS2's C extension requires exact float types (crashes with PyFloat_Check assertion).
+    rospy_too coerces int to float at assignment time to ensure compatibility.
+    """
+    if not is_ros2():
+        print("SKIP: test_int_to_float_coercion (ROS1)")
+        return
+
+    from geometry_msgs.msg import Point
+
+    setup()
+
+    # Point.x, Point.y, Point.z are float64 fields
+    p = Point()
+    p.x = 1  # int assigned to float64 field
+    assert p.x == 1.0, "Expected value 1.0, got %s" % p.x
+    assert isinstance(p.x, float), "Expected float type after coercion, got %s" % type(p.x).__name__
+    print("OK: int coerced to float")
+
+
+def test_uint8_array_to_bytes():
+    """Test that uint8[] fields return bytes (ROS1 genpy compatibility).
+
+    ROS1's genpy treats uint8[] fields as bytes (b''), not lists.
+    ROS2 may return array.array('B') or list depending on version.
+    rospy_too coerces uint8[] fields to bytes on read for compatibility.
+    """
+    if not is_ros2():
+        print("SKIP: test_uint8_array_to_bytes (ROS1)")
+        return
+
+    from sensor_msgs.msg import Image
+
+    setup()
+
+    img = Image()
+
+    # Test assignment with list
+    img.data = [0, 128, 255]
+    result = img.data
+    assert isinstance(result, bytes), "Expected bytes, got %s" % type(result).__name__
+    assert result == bytes([0, 128, 255]), "Expected b'\\x00\\x80\\xff', got %r" % result
+    print("OK: uint8[] field returns bytes from list assignment")
+
+    # Test assignment with bytes (should pass through)
+    img.data = b'\x01\x02\x03'
+    result = img.data
+    assert isinstance(result, bytes), "Expected bytes, got %s" % type(result).__name__
+    assert result == b'\x01\x02\x03', "Expected b'\\x01\\x02\\x03', got %r" % result
+    print("OK: uint8[] field returns bytes from bytes assignment")
+
+    # Test empty array
+    img.data = []
+    result = img.data
+    assert isinstance(result, bytes), "Expected bytes, got %s" % type(result).__name__
+    assert result == b'', "Expected b'', got %r" % result
+    print("OK: uint8[] field returns bytes from empty list")
+
+    # Test assignment with bytearray
+    img.data = bytearray([10, 20, 30])
+    result = img.data
+    assert isinstance(result, bytes), "Expected bytes, got %s" % type(result).__name__
+    assert result == bytes([10, 20, 30]), "Expected b'\\x0a\\x14\\x1e', got %r" % result
+    print("OK: uint8[] field returns bytes from bytearray assignment")
+
+
 def main():
     failed = 0
 
@@ -265,6 +334,8 @@ def main():
         test_time_duration_positional_args,
         test_header_none_autofill,
         test_message_wrapper_idempotency,
+        test_int_to_float_coercion,
+        test_uint8_array_to_bytes,
     ]
 
     for test in tests:

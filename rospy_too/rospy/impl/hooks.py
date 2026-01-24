@@ -2,6 +2,7 @@
 # Intercepts imports of *.msg and *.srv modules and wraps message classes
 # with ROS1-compatible versions supporting positional arguments.
 
+import array
 import importlib
 import sys
 import types
@@ -9,6 +10,58 @@ from importlib.abc import Loader, MetaPathFinder
 from importlib.machinery import ModuleSpec
 
 from ..logging import logwarn_once
+
+
+# Default values for ROS message field types (ROS1 genpy compatibility)
+_DEFAULT_VALUES = {
+    'double': 0.0, 'float': 0.0,
+    'int8': 0, 'int16': 0, 'int32': 0, 'int64': 0,
+    'uint8': 0, 'uint16': 0, 'uint32': 0, 'uint64': 0,
+    'byte': 0, 'char': 0,
+    'string': '',
+    'boolean': False,
+}
+
+
+def _coerce_field_value(field_type, value):
+    """Coerce value to match field type (ROS1 genpy compatibility).
+
+    ROS1's genpy is permissive and allows int for float fields (coerced at
+    serialization via struct.pack). ROS2's C extension requires exact types.
+    This function coerces values at assignment time to match ROS1 behavior.
+    """
+    if value is None:
+        return _DEFAULT_VALUES.get(field_type, value)
+    if field_type in ('double', 'float') and isinstance(value, int) and not isinstance(value, bool):
+        return float(value)
+    return value
+
+
+def _is_uint8_array_type(field_type):
+    """Check if field type is a uint8/char array (variable, bounded, or fixed-length).
+
+    ROS1 genpy treats both uint8[] and char[] as bytes.
+    """
+    return (
+        field_type.startswith('sequence<uint8')
+        or field_type.startswith('sequence<char')
+        or field_type.startswith('uint8[')
+        or field_type.startswith('char[')
+    )
+
+
+def _coerce_to_bytes(value):
+    """Coerce uint8/char array value to bytes for ROS1 compatibility.
+
+    ROS1's genpy treats uint8[] and char[] fields as bytes, not lists.
+    ROS2 may return array.array internally, which we convert via buffer protocol.
+    Note: numpy.ndarray is not explicitly supported; users should call .tobytes().
+    """
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, (bytearray, list, tuple, array.array)):
+        return bytes(value)
+    return value
 
 
 # Try to import module, falling back to _msgs/_interfaces suffixed packages.
@@ -188,6 +241,13 @@ def _create_message_wrapper(original_class):
 
     original_init = original_class.__init__
     is_time_type = _is_time_or_duration(original_class)
+    field_types = original_class._fields_and_field_types
+
+    # Pre-compute uint8 array fields for fast O(1) lookup
+    uint8_array_fields = frozenset(
+        name for name, ftype in field_types.items()
+        if _is_uint8_array_type(ftype)
+    )
 
     def enhanced_init(self, *args, **kwargs):
         # Handle Time/Duration with ROS1-style constructor: (secs) or (secs, nsecs)
@@ -216,9 +276,22 @@ def _create_message_wrapper(original_class):
 
         original_init(self, **kwargs)
 
-    # Try to replace __init__ directly
+    def coercing_setattr(self, name, value):
+        if name in field_types:
+            value = _coerce_field_value(field_types[name], value)
+        object.__setattr__(self, name, value)
+
+    def coercing_getattribute(self, name):
+        value = object.__getattribute__(self, name)
+        if name in uint8_array_fields:
+            return _coerce_to_bytes(value)
+        return value
+
+    # Try to replace __init__, __setattr__, __getattribute__ directly
     try:
         original_class.__init__ = enhanced_init
+        original_class.__setattr__ = coercing_setattr
+        original_class.__getattribute__ = coercing_getattribute
         original_class._rospy_wrapped = True
         original_class._original_ros2_init = original_init
     except (TypeError, AttributeError):
@@ -238,6 +311,17 @@ def _create_message_wrapper(original_class):
                             kwargs[field_name] = arg
 
                 original_init(self, **kwargs)
+
+            def __setattr__(self, name, value):
+                if name in field_types:
+                    value = _coerce_field_value(field_types[name], value)
+                super().__setattr__(name, value)
+
+            def __getattribute__(self, name):
+                value = super().__getattribute__(name)
+                if name in uint8_array_fields:
+                    return _coerce_to_bytes(value)
+                return value
 
         WrappedMessage.__name__ = original_class.__name__
         WrappedMessage.__qualname__ = original_class.__qualname__

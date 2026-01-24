@@ -788,6 +788,29 @@ sys.exit(0)
         print("SKIP: test_subscriber_methods_before_init (requires subprocess)")
 
 
+def test_publish_int_to_float_field():
+    """Test publishing message with int assigned to float field.
+
+    rospy_too coerces int to float at assignment time (ROS1 genpy compatibility).
+    This test verifies that publishing works with int values assigned to float fields.
+    """
+    import rospy
+    from geometry_msgs.msg import Point
+
+    setup()
+
+    pub = rospy.Publisher("/test/int_float_coerce", Point, queue_size=10)
+    time.sleep(0.3)
+
+    p = Point()
+    p.x = 1  # int values - should be coerced to float
+    p.y = 2
+    p.z = 3
+
+    pub.publish(p)  # Should work with coercion
+    print("OK: publish with int-to-float coercion succeeded")
+
+
 def main():
     failed = 0
 
@@ -816,6 +839,7 @@ def main():
         test_publisher_publish_before_init,
         test_publisher_methods_before_init,
         test_subscriber_methods_before_init,
+        test_publish_int_to_float_field,
     ]
 
     for test in tests:
