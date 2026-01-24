@@ -490,6 +490,29 @@ def test_list_index_access_blocked():
     print("OK: list index access blocked (ROS1 behavior)")
 
 
+def test_get_private_namespace():
+    """Verify get_param('~', None) returns all private params as dict."""
+    import rospy
+    setup()
+
+    # Set some private params
+    rospy.set_param("~priv_ns_a", "value_a")
+    rospy.set_param("~priv_ns_b", 42)
+
+    # Get entire private namespace
+    result = rospy.get_param("~", None)
+
+    # Should return dict with our params (or None if no params)
+    assert result is not None, "Expected dict, got None"
+    assert isinstance(result, dict), "Expected dict, got %s" % type(result)
+    assert "priv_ns_a" in result, "Expected priv_ns_a in result, got %s" % result
+    assert "priv_ns_b" in result, "Expected priv_ns_b in result, got %s" % result
+    assert result["priv_ns_a"] == "value_a", "Expected value_a, got %s" % result["priv_ns_a"]
+    assert result["priv_ns_b"] == 42, "Expected 42, got %s" % result["priv_ns_b"]
+
+    print("OK: get private namespace")
+
+
 def main():
     failed = 0
 
@@ -517,6 +540,7 @@ def main():
         test_list_of_dicts_param,
         test_nested_list_param,
         test_list_index_access_blocked,
+        test_get_private_namespace,
     ]
 
     for test in tests:

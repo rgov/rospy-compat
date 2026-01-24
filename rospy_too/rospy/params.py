@@ -29,7 +29,7 @@ def _normalize(param_name):
 
     # ROS1 uses / for param hierarchy, ROS2 uses dots internally
     # Convert remaining slashes to dots for ROS2 compatibility
-    param_name = param_name.replace('/', '.')
+    param_name = param_name.replace('/', '.').rstrip('.')
     return param_name
 
 
