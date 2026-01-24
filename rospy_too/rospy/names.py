@@ -20,7 +20,7 @@ def get_caller_id():
     return get_name()
 
 
-def _normalize_name(name, warn=True):
+def _normalize_name(name):
     # Normalize a ROS name for ROS2 compatibility.
     # - Collapses double slashes (foo//bar -> foo/bar)
     # - Removes trailing slashes (topic/ -> topic)
@@ -36,14 +36,13 @@ def _normalize_name(name, warn=True):
 
     # Emulate rospy quirk: ~/foo resolves to /foo due to ns_join bug
     if name.startswith('~/') and name != '~/':
-        if warn:
-            from .logging import logwarn_once
+        from .logging import logwarn_once
 
-            logwarn_once(
-                "Emulating rospy quirk: '%s' resolves to '%s' due to ~/ prefix",
-                name,
-                name[1:],
-            )
+        logwarn_once(
+            "Emulating rospy quirk: '%s' resolves to '%s' due to ~/ prefix",
+            name,
+            name[1:],
+        )
         return name[1:]  # ~/foo -> /foo
 
     # Convert ROS1-style private name (~, ~foo) to ROS2-style (~/, ~/foo)

@@ -23,16 +23,14 @@ _DEFAULT_VALUES = {
 }
 
 
-def _coerce_field_value(field_type, value):
-    """Coerce value to match field type (ROS1 genpy compatibility).
-
-    ROS1's genpy is permissive and allows int for float fields (coerced at
-    serialization via struct.pack). ROS2's C extension requires exact types.
-    This function coerces values at assignment time to match ROS1 behavior.
-    """
+def _coerce_field_value(field_name, field_type, value):
     if value is None:
         return _DEFAULT_VALUES.get(field_type, value)
     if field_type in ('double', 'float') and isinstance(value, int) and not isinstance(value, bool):
+        logwarn_once(
+            "Coercing int to float for field '%s': this will break in rclpy",
+            field_name,
+        )
         return float(value)
     return value
 
@@ -50,16 +48,14 @@ def _is_uint8_array_type(field_type):
     )
 
 
-def _coerce_to_bytes(value):
-    """Coerce uint8/char array value to bytes for ROS1 compatibility.
-
-    ROS1's genpy treats uint8[] and char[] fields as bytes, not lists.
-    ROS2 may return array.array internally, which we convert via buffer protocol.
-    Note: numpy.ndarray is not explicitly supported; users should call .tobytes().
-    """
+def _coerce_to_bytes(field_name, value):
     if isinstance(value, bytes):
         return value
     if isinstance(value, (bytearray, list, tuple, array.array)):
+        logwarn_once(
+            "Coercing field '%s' to bytes: this will break in rclpy",
+            field_name,
+        )
         return bytes(value)
     return value
 
@@ -278,13 +274,13 @@ def _create_message_wrapper(original_class):
 
     def coercing_setattr(self, name, value):
         if name in field_types:
-            value = _coerce_field_value(field_types[name], value)
+            value = _coerce_field_value(name, field_types[name], value)
         object.__setattr__(self, name, value)
 
     def coercing_getattribute(self, name):
         value = object.__getattribute__(self, name)
         if name in uint8_array_fields:
-            return _coerce_to_bytes(value)
+            return _coerce_to_bytes(name, value)
         return value
 
     # Try to replace __init__, __setattr__, __getattribute__ directly
@@ -314,13 +310,13 @@ def _create_message_wrapper(original_class):
 
             def __setattr__(self, name, value):
                 if name in field_types:
-                    value = _coerce_field_value(field_types[name], value)
+                    value = _coerce_field_value(name, field_types[name], value)
                 super().__setattr__(name, value)
 
             def __getattribute__(self, name):
                 value = super().__getattribute__(name)
                 if name in uint8_array_fields:
-                    return _coerce_to_bytes(value)
+                    return _coerce_to_bytes(name, value)
                 return value
 
         WrappedMessage.__name__ = original_class.__name__
