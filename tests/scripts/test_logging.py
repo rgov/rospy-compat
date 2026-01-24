@@ -201,6 +201,109 @@ def test_throttle_identical_different_message():
     print('OK: throttle_identical different messages (no crash)')
 
 
+def test_exc_info():
+    """Test that exc_info=True captures traceback in log output."""
+    import rospy
+
+    setup()
+
+    # ROS2 only - rospy_too adds exc_info support
+    try:
+        from rospy.logging import _format_exc_info
+    except ImportError:
+        print('SKIP: exc_info not available (ROS1)')
+        return
+
+    # Test without exception context - should not crash
+    rospy.logerr("error without exception", exc_info=True)
+
+    # Test inside exception handler
+    try:
+        raise ValueError("test error for exc_info")
+    except ValueError:
+        rospy.logerr("error with exception", exc_info=True)
+
+    # Test with explicit exc_info tuple
+    try:
+        raise RuntimeError("explicit exc_info test")
+    except RuntimeError:
+        import sys
+        rospy.logerr("explicit exc_info", exc_info=sys.exc_info())
+
+    # Test exc_info on all logging functions
+    try:
+        raise TypeError("type error")
+    except TypeError:
+        rospy.logdebug("debug exc", exc_info=True)
+        rospy.loginfo("info exc", exc_info=True)
+        rospy.logwarn("warn exc", exc_info=True)
+        rospy.logerr("err exc", exc_info=True)
+        rospy.logfatal("fatal exc", exc_info=True)
+
+    # Test exc_info with throttle
+    try:
+        raise KeyError("key error")
+    except KeyError:
+        rospy.logerr_throttle(5.0, "throttle exc", exc_info=True)
+
+    # Test exc_info with once
+    try:
+        raise IndexError("index error")
+    except IndexError:
+        rospy.logerr_once("once exc", exc_info=True)
+
+    # Test exc_info with throttle_identical
+    try:
+        raise AttributeError("attr error")
+    except AttributeError:
+        rospy.logerr_throttle_identical(5.0, "identical exc", exc_info=True)
+
+    print('OK: exc_info support')
+
+
+def _once_helper_a():
+    """Helper that logs once from a specific location."""
+    import rospy
+    rospy.loginfo_once("once from helper a")
+
+
+def _once_helper_b():
+    """Helper that logs once from a different location."""
+    import rospy
+    rospy.loginfo_once("once from helper b")
+
+
+def test_once_per_callsite():
+    """Test that _once functions track state per call site, not globally."""
+    import rospy
+
+    setup()
+
+    # ROS2 only - rospy_too manages its own _once state
+    try:
+        from rospy.logging import _once_logged
+    except ImportError:
+        print('SKIP: per-callsite _once not available (ROS1)')
+        return
+
+    # Clear internal state to ensure test isolation
+    _once_logged.clear()
+
+    # Both helpers should log once (different call sites)
+    _once_helper_a()
+    _once_helper_b()
+
+    # Calling again should not log (same call sites)
+    _once_helper_a()
+    _once_helper_b()
+
+    # Verify the state has exactly 2 entries (one per call site)
+    assert len(_once_logged) == 2, \
+        f"Expected 2 call sites tracked, got {len(_once_logged)}"
+
+    print('OK: _once per-callsite tracking')
+
+
 def main():
     failed = 0
 
@@ -216,6 +319,8 @@ def main():
         test_throttle_identical_functions_exist,
         test_throttle_identical_same_message,
         test_throttle_identical_different_message,
+        test_exc_info,
+        test_once_per_callsite,
     ]
 
     for test in tests:
