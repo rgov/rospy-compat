@@ -13,7 +13,7 @@ def get_name():
 
 
 def get_namespace():
-    return _get_node().get_namespace()
+    return _get_node().get_namespace().rstrip('/') + '/'
 
 
 def get_caller_id():

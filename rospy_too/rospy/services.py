@@ -2,10 +2,15 @@
 
 import time as python_time
 
-from .exceptions import ROSException, ROSInterruptException, ServiceException
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+
+from .exceptions import (
+    ROSException, ROSInitException, ROSInterruptException, ServiceException,
+)
 from .impl.node import _get_node, is_shutdown
 from .impl.pending import register_node_init_callback
 from .logging import logerr, logwarn_once
+from .names import resolve_name
 
 # Default timeout for service calls (seconds). ROS2 cannot propagate handler
 # failures to clients, so we use a timeout to prevent infinite hangs.
@@ -17,7 +22,6 @@ def _resolve_service(node, name):
     try:
         return node.resolve_service_name(name, only_expand=False)
     except (AttributeError, Exception):
-        from .names import resolve_name
         return resolve_name(name)
 
 
@@ -74,7 +78,12 @@ class Service:
 
             return response
 
-        self._service = node.create_service(self._service_type, resolved, wrapped)
+        self._service = node.create_service(
+            self._service_type,
+            resolved,
+            wrapped,
+            callback_group=MutuallyExclusiveCallbackGroup(),
+        )
 
     def shutdown(self, reason=''):
         if self._service is None:
@@ -88,11 +97,26 @@ class ServiceProxy:
         if persistent:
             logwarn_once('persistent=True is not supported in ROS 2')
 
-        self.node = _get_node()
-        resolved = _resolve_service(self.node, name)
-        self.service_name = resolved
+        self.service_name = name
         self.service_type = service_type
-        self.client = self.node.create_client(service_type, resolved)
+        self._client = None
+        register_node_init_callback(self)
+
+    def _after_node_init(self, node):
+        self.node = node
+        self.service_name = _resolve_service(node, self.service_name)
+        # A subscriber or service handler may call this proxy synchronously.
+        self._client = node.create_client(
+            self.service_type,
+            self.service_name,
+            callback_group=MutuallyExclusiveCallbackGroup(),
+        )
+
+    @property
+    def client(self):
+        if self._client is None:
+            raise ROSInitException('Service client used before init_node()')
+        return self._client
 
     def wait_for_service(self, timeout=None):
         if timeout is None:

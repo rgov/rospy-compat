@@ -5,6 +5,7 @@ import random
 import signal
 import sys
 import threading
+import traceback
 import time as python_time
 
 import rclpy
@@ -28,7 +29,8 @@ _node = None
 _node_lock = threading.RLock()
 _executor = None
 _executor_thread = None
-_shutdown_hooks = []      # on_shutdown: zero-arg callbacks
+_client_shutdown_hooks = []  # on_shutdown: zero-arg callbacks
+_shutdown_hooks = []         # add_shutdown_hook: one-arg callbacks
 _preshutdown_hooks = []   # add_preshutdown_hook: one-arg (reason)
 _is_shutdown = False
 _shutdown_requested = False
@@ -163,31 +165,34 @@ def spin():
 
 
 def is_shutdown():
-    return _is_shutdown or not rclpy.ok()
+    return _is_shutdown or (_node is not None and not rclpy.ok())
+
+
+def is_shutdown_requested():
+    return _shutdown_requested
 
 
 def signal_shutdown(reason):
     # Shutdown order: set flag, run hooks, cleanup node/executor, shutdown rclpy
     global _is_shutdown, _shutdown_requested
 
-    if _shutdown_requested:
-        return
-    _shutdown_requested = True
+    with _node_lock:
+        if _shutdown_requested:
+            return
+        _shutdown_requested = True
+
+    def run_hooks(hooks, *args):
+        for hook in hooks[:]:
+            try:
+                hook(*args)
+            except Exception:
+                traceback.print_exc()
+        hooks.clear()
+
+    run_hooks(_client_shutdown_hooks)
+    run_hooks(_preshutdown_hooks, reason)
     _is_shutdown = True
-
-    # Run preshutdown hooks first (with reason arg)
-    for hook in _preshutdown_hooks:
-        try:
-            hook(reason)
-        except Exception:
-            pass
-
-    # Run shutdown hooks (no args, ROS1 compatible)
-    for hook in _shutdown_hooks:
-        try:
-            hook()
-        except Exception:
-            pass
+    run_hooks(_shutdown_hooks, reason)
 
     # Clean up node/executor BEFORE rclpy.shutdown()
     _shutdown_node_internal()
@@ -202,6 +207,10 @@ def signal_shutdown(reason):
 
 
 def on_shutdown(h):
+    _client_shutdown_hooks.append(h)
+
+
+def add_shutdown_hook(h):
     _shutdown_hooks.append(h)
 
 

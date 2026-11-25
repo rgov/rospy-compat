@@ -5,6 +5,7 @@ from rclpy.parameter import Parameter
 from .exceptions import ROSInitException
 from .impl.node import _get_node, _is_node_initialized
 from .logging import logwarn_once
+from .names import get_name, get_namespace
 
 _deleted_params = set()  # Mask set for simulating parameter deletion
 _unspecified = object()  # Sentinel for unspecified default
@@ -16,20 +17,13 @@ def _normalize(param_name):
             raise ROSInitException(
                 'Cannot resolve private param before init_node()'
             )
-        node = _get_node()
-        # ~foo -> /namespace/nodename/foo (like ROS1)
-        ns = node.get_namespace().rstrip('/')
-        if ns == '/' or ns == '':
-            param_name = f'/{node.get_name()}/{param_name[1:]}'
-        else:
-            param_name = f'{ns}/{node.get_name()}/{param_name[1:]}'
-
-    if param_name.startswith('/'):
-        param_name = param_name[1:]
+        param_name = get_name() + '/' + param_name[1:]
+    elif not param_name.startswith('/'):
+        param_name = get_namespace() + param_name
 
     # ROS1 uses / for param hierarchy, ROS2 uses dots internally
     # Convert remaining slashes to dots for ROS2 compatibility
-    param_name = param_name.replace('/', '.').rstrip('.')
+    param_name = '.'.join(part for part in param_name.split('/') if part)
     return param_name
 
 

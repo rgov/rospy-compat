@@ -15,6 +15,7 @@ TEST_TIMEOUT = 30
 TEST_MODULES = [
     'test_import',
     'test_node',
+    'test_scoped_startup',
     'test_time',
     'test_params',
     'test_logging',

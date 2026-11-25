@@ -11,7 +11,7 @@ install_message_hooks()
 # Apply runtime patches (builtin_interfaces, exceptions, rclpy.create_node hook)
 # ServiceException is imported from .services above
 # Submodules for rospy.core access
-from . import core
+from . import core, rostime
 
 # Exceptions
 from .exceptions import (
