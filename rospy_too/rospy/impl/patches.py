@@ -33,8 +33,8 @@ def _hooked_create_node(*args, **kwargs):
             try:
                 if result.get_parameter('use_sim_time').value:
                     logwarn_once(
-                        'use_sim_time is True but rospy_too does not support simulated time; '
-                        'Time.now() will return wall clock time'
+                        'use_sim_time is active. Rate.sleep() and rospy.sleep() '
+                        'use wall time.'
                     )
             except Exception:
                 pass  # Parameter not declared or other error
