@@ -143,80 +143,81 @@ def test_simple_action_server_creation():
 
 
 def test_client_server_interaction():
-    """Test basic client-server interaction."""
     setup()
-
     action_info = get_test_action_info()
     if action_info is None:
-        print("SKIP: test_client_server_interaction (no test action available)")
+        print('SKIP: test_client_server_interaction (no test action available)')
         return
-
-    ActionType, make_goal, get_result = action_info
 
     import rospy
     from actionlib import SimpleActionClient, SimpleActionServer
     from actionlib_msgs.msg import GoalStatus
+    from queue import Queue
 
-    results = {"feedback_count": 0, "done": False, "result": None}
+    if is_ros2():
+        from example_interfaces.msg import FibonacciActionGoal as GoalEnvelope
+        from example_interfaces.msg import (
+            FibonacciActionResult as ResultEnvelope,
+        )
+        from example_interfaces.msg import FibonacciFeedback, FibonacciResult
 
-    def execute_cb(goal):
-        # Publish feedback
-        if is_ros2():
-            server.publish_feedback(ActionType.Feedback(sequence=[0, 1]))
-        else:
-            from actionlib.msg import TestFeedback
-            server.publish_feedback(TestFeedback(feedback=1))
-        results["feedback_count"] += 1
+        def execute(goal):
+            server.publish_feedback(FibonacciFeedback([goal.order]))
+            server.set_succeeded(FibonacciResult([goal.order]), text='sampled')
 
-        if server.is_preempt_requested():
-            server.set_preempted()
-            return
+        def value(result):
+            return list(result.sequence)[0]
+    else:
+        from actionlib.msg import TestActionGoal as GoalEnvelope
+        from actionlib.msg import TestActionResult as ResultEnvelope
+        from actionlib.msg import TestFeedback, TestResult
 
-        # Compute result
-        if is_ros2():
-            result = ActionType.Result()
-            result.sequence = [0, 1, 1, 2, 3]
-        else:
-            from actionlib.msg import TestResult
-            result = TestResult(result=42)
-        server.set_succeeded(result)
+        def execute(goal):
+            server.publish_feedback(TestFeedback(goal.goal))
+            server.set_succeeded(TestResult(goal.goal), text='sampled')
 
-    # Create server
-    server = SimpleActionServer("fibonacci", ActionType, execute_cb=execute_cb, auto_start=False)
+        def value(result):
+            return result.result
+
+    spec, make_goal, _ = action_info
+    goals, results, completions = Queue(), Queue(), Queue()
+    name = '~observed_cast'
+    goal_sub = rospy.Subscriber(name + '/goal', GoalEnvelope, goals.put)
+    result_sub = rospy.Subscriber(name + '/result', ResultEnvelope, results.put)
+    server = SimpleActionServer(name, spec, execute, auto_start=False)
     server.start()
-    time.sleep(0.5)  # Let server start
+    client = SimpleActionClient(name, spec)
+    assert client.wait_for_server(rospy.Duration(3))
 
-    # Create client
-    client = SimpleActionClient("fibonacci", ActionType)
+    def done(_, result):
+        # These calls must also work from inside the done callback.
+        completions.put(
+            (client.get_state(), value(client.get_result()), value(result))
+        )
 
-    # Wait for server
-    found = client.wait_for_server(timeout=rospy.Duration(5.0))
-    assert found, "Server not found"
-    print("OK: client found server")
+    ids = set()
+    for sample in (3, 7):
+        client.send_goal(make_goal(sample), done_cb=done)
+        assert client.wait_for_result(rospy.Duration(3))
+        assert completions.get(timeout=1) == (
+            GoalStatus.SUCCEEDED,
+            sample,
+            sample,
+        )
+        start = goals.get(timeout=1)
+        finish = results.get(timeout=1)
+        assert start.goal == make_goal(sample)
+        assert finish.status.goal_id == start.goal_id
+        assert finish.status.status == GoalStatus.SUCCEEDED
+        assert finish.status.text == 'sampled'
+        assert finish.header.stamp >= start.header.stamp > rospy.Time()
+        assert value(finish.result) == sample
+        ids.add(start.goal_id.id)
 
-    # Send goal with callbacks
-    def done_cb(status, result):
-        results["done"] = True
-        results["result"] = result
-        results["status"] = status
-
-    def feedback_cb(feedback):
-        results["feedback_count"] += 1
-
-    goal = make_goal(5)
-    client.send_goal(goal, done_cb=done_cb, feedback_cb=feedback_cb)
-
-    # Wait for result
-    finished = client.wait_for_result(timeout=rospy.Duration(5.0))
-    assert finished, "Goal did not finish"
-
-    state = client.get_state()
-    assert state == GoalStatus.SUCCEEDED, "Expected SUCCEEDED, got %s" % state
-
-    result = client.get_result()
-    assert result is not None, "Expected result"
-
-    print("OK: client-server interaction (state=%s)" % state)
+    assert len(ids) == 2 and '' not in ids
+    goal_sub.unregister()
+    result_sub.unregister()
+    print('OK: observed consecutive action goals and results')
 
 
 def test_send_goal_and_wait():

@@ -184,7 +184,7 @@ _seq_warned = False
 
 def _patch_header():
     def _get_seq(self):
-        return getattr(self, '_seq_value', 0)
+        return 0
 
     def _set_seq(self, value):
         global _seq_warned
@@ -195,7 +195,6 @@ def _patch_header():
                 stacklevel=2,
             )
             _seq_warned = True
-        self._seq_value = value
 
     if not hasattr(Header, '_seq_patched'):
         Header.seq = property(_get_seq, _set_seq)

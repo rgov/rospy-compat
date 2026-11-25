@@ -21,6 +21,7 @@ TEST_MODULES = [
     'test_logging',
     'test_messages',
     'test_pubsub',
+    'test_message_delivery',
     'test_services',
     'test_timer',
     'test_anymsg',

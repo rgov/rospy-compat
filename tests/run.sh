@@ -93,6 +93,7 @@ run_foxy() {
         podman run --rm \
             -v "$SCRIPT_DIR/scripts:/mnt/scripts:ro" \
             -v "$SCRIPT_DIR/ros2_pkg:/mnt/ros2_pkg:ro" \
+            -v "$PROJECT_DIR/rospy_too_interfaces:/mnt/rospy_too_interfaces:ro" \
             -v "$PROJECT_DIR/rospy_too:/mnt/rospy_too:ro" \
             -v "$PROJECT_DIR/coverage/foxy:/mnt/coverage:rw" \
             docker.io/ros:foxy \
@@ -112,6 +113,7 @@ run_foxy() {
                 cp /mnt/ros2_pkg/CMakeLists.txt /ws/src/rospy_too_tests/
 
                 cp -r /mnt/rospy_too/* /ws/src/rospy_too/
+                cp -r /mnt/rospy_too_interfaces /ws/src/
 
                 mkdir -p /ws/src/rospy_too_tests/scripts
                 cp /mnt/scripts/*.py /ws/src/rospy_too_tests/scripts/
@@ -168,6 +170,7 @@ EOF
         podman run --rm \
             -v "$SCRIPT_DIR/scripts:/mnt/scripts:ro" \
             -v "$SCRIPT_DIR/ros2_pkg:/mnt/ros2_pkg:ro" \
+            -v "$PROJECT_DIR/rospy_too_interfaces:/mnt/rospy_too_interfaces:ro" \
             -v "$PROJECT_DIR/rospy_too:/mnt/rospy_too:ro" \
             docker.io/ros:foxy \
             bash -c '
@@ -186,6 +189,7 @@ EOF
                 cp /mnt/ros2_pkg/CMakeLists.txt /ws/src/rospy_too_tests/
 
                 cp -r /mnt/rospy_too/* /ws/src/rospy_too/
+                cp -r /mnt/rospy_too_interfaces /ws/src/
 
                 mkdir -p /ws/src/rospy_too_tests/scripts
                 cp /mnt/scripts/*.py /ws/src/rospy_too_tests/scripts/
@@ -234,6 +238,7 @@ run_rolling() {
         podman run --rm \
             -v "$SCRIPT_DIR/scripts:/mnt/scripts:ro" \
             -v "$SCRIPT_DIR/ros2_pkg:/mnt/ros2_pkg:ro" \
+            -v "$PROJECT_DIR/rospy_too_interfaces:/mnt/rospy_too_interfaces:ro" \
             -v "$PROJECT_DIR/rospy_too:/mnt/rospy_too:ro" \
             -v "$PROJECT_DIR/coverage/rolling:/mnt/coverage:rw" \
             docker.io/ros:rolling \
@@ -253,6 +258,7 @@ run_rolling() {
                 cp /mnt/ros2_pkg/CMakeLists.txt /ws/src/rospy_too_tests/
 
                 cp -r /mnt/rospy_too/* /ws/src/rospy_too/
+                cp -r /mnt/rospy_too_interfaces /ws/src/
 
                 mkdir -p /ws/src/rospy_too_tests/scripts
                 cp /mnt/scripts/*.py /ws/src/rospy_too_tests/scripts/
@@ -309,6 +315,7 @@ EOF
         podman run --rm \
             -v "$SCRIPT_DIR/scripts:/mnt/scripts:ro" \
             -v "$SCRIPT_DIR/ros2_pkg:/mnt/ros2_pkg:ro" \
+            -v "$PROJECT_DIR/rospy_too_interfaces:/mnt/rospy_too_interfaces:ro" \
             -v "$PROJECT_DIR/rospy_too:/mnt/rospy_too:ro" \
             docker.io/ros:rolling \
             bash -c '
@@ -327,6 +334,7 @@ EOF
                 cp /mnt/ros2_pkg/CMakeLists.txt /ws/src/rospy_too_tests/
 
                 cp -r /mnt/rospy_too/* /ws/src/rospy_too/
+                cp -r /mnt/rospy_too_interfaces /ws/src/
 
                 mkdir -p /ws/src/rospy_too_tests/scripts
                 cp /mnt/scripts/*.py /ws/src/rospy_too_tests/scripts/

@@ -1,219 +1,156 @@
-"""SimpleActionClient implementation wrapping rclpy.action.ActionClient."""
-
 import threading
+from functools import partial
 
 import rospy
 from rclpy.action import ActionClient as ROS2ActionClient
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
-from actionlib.goal_status import GoalStatus, SimpleGoalState, ros2_status_to_ros1
 from actionlib.action_utils import get_action_type
+from actionlib.goal_status import (
+    GoalStatus,
+    SimpleGoalState,
+    ros2_status_to_ros1,
+)
+
+__all__ = ['SimpleActionClient', 'SimpleGoalState']
+
+
+class _Goal:
+    def __init__(self, done_cb, active_cb, feedback_cb):
+        self.done_cb = done_cb
+        self.active_cb = active_cb
+        self.feedback_cb = feedback_cb
+        self.handle = None
+        self.result = None
+        self.status = GoalStatus.PENDING
+        self.cancel_requested = False
+        self.done = threading.Event()
+
+
+def _timeout(duration):
+    return duration.to_sec() if duration.to_sec() > 0 else None
 
 
 class SimpleActionClient:
-    """
-    A simple client for interacting with an action server.
-
-    This wraps rclpy.action.ActionClient with the ROS1 actionlib API.
-    """
-
     def __init__(self, ns, ActionSpec):
-        """
-        Construct a SimpleActionClient.
-
-        Args:
-            ns: The namespace for the action (e.g., 'fibonacci')
-            ActionSpec: The ROS2 action type (e.g., example_interfaces.action.Fibonacci)
-        """
-        self._ns = ns
-        self._action_type = get_action_type(ActionSpec)
-        self._node = rospy.impl.node._get_node()
-
-        self._client = ROS2ActionClient(self._node, self._action_type, ns)
-
-        self._goal_handle = None
-        self._result = None
-        self._status = GoalStatus.LOST
-        self._status_text = ""
-        self._simple_state = SimpleGoalState.DONE
-
-        self._done_cb = None
-        self._active_cb = None
-        self._feedback_cb = None
-
-        self._done_event = threading.Event()
+        self._client = ROS2ActionClient(
+            rospy.impl.node._get_node(),
+            get_action_type(ActionSpec),
+            rospy.resolve_name(ns),
+            callback_group=MutuallyExclusiveCallbackGroup(),
+        )
+        self._goal = None
         self._lock = threading.Lock()
 
     def wait_for_server(self, timeout=rospy.Duration()):
-        """
-        Block until the action server is available.
-
-        Args:
-            timeout: Max time to wait. Zero means wait forever.
-
-        Returns:
-            True if server became available, False on timeout.
-        """
-        if timeout == rospy.Duration() or timeout.to_sec() <= 0:
-            timeout_sec = None
-        else:
-            timeout_sec = timeout.to_sec()
-
-        return self._client.wait_for_server(timeout_sec=timeout_sec)
+        return self._client.wait_for_server(timeout_sec=_timeout(timeout))
 
     def send_goal(self, goal, done_cb=None, active_cb=None, feedback_cb=None):
-        """
-        Send a goal to the action server.
-
-        Args:
-            goal: The goal message to send
-            done_cb: Callback(status, result) when goal completes
-            active_cb: Callback() when goal becomes active
-            feedback_cb: Callback(feedback) for progress updates
-        """
-        self.stop_tracking_goal()
-
+        tracked = _Goal(done_cb, active_cb, feedback_cb)
         with self._lock:
-            self._done_cb = done_cb
-            self._active_cb = active_cb
-            self._feedback_cb = feedback_cb
-            self._simple_state = SimpleGoalState.PENDING
-            self._done_event.clear()
-            self._result = None
-            self._status = GoalStatus.PENDING
-            self._status_text = ""
-
-        # Send goal asynchronously
-        send_goal_future = self._client.send_goal_async(
-            goal,
-            feedback_callback=self._on_feedback
+            self._goal = tracked
+        future = self._client.send_goal_async(
+            goal, feedback_callback=partial(self._feedback, tracked)
         )
-        send_goal_future.add_done_callback(self._on_goal_response)
+        future.add_done_callback(partial(self._accepted, tracked))
 
-    def _on_goal_response(self, future):
-        """Handle the response from send_goal."""
-        goal_handle = future.result()
-        if not goal_handle.accepted:
-            with self._lock:
-                self._status = GoalStatus.REJECTED
-                self._simple_state = SimpleGoalState.DONE
-                self._done_event.set()
-                if self._done_cb:
-                    self._done_cb(GoalStatus.REJECTED, None)
+    def _accepted(self, tracked, future):
+        handle = future.result()
+        if not handle.accepted:
+            self._finish(tracked, GoalStatus.REJECTED, None)
             return
-
         with self._lock:
-            self._goal_handle = goal_handle
-            self._status = GoalStatus.ACTIVE
-            self._simple_state = SimpleGoalState.ACTIVE
-            if self._active_cb:
-                self._active_cb()
+            if self._goal is not tracked:
+                return
+            tracked.handle = handle
+            tracked.status = GoalStatus.ACTIVE
+            if tracked.cancel_requested:
+                handle.cancel_goal_async()
+        result = handle.get_result_async()
+        try:
+            if tracked.active_cb is not None:
+                tracked.active_cb()
+        finally:
+            result.add_done_callback(partial(self._received_result, tracked))
 
-        # Request the result
-        result_future = goal_handle.get_result_async()
-        result_future.add_done_callback(self._on_result)
+    def _received_result(self, tracked, future):
+        response = future.result()
+        self._finish(
+            tracked, ros2_status_to_ros1(response.status), response.result
+        )
 
-    def _on_result(self, future):
-        """Handle the result from the action."""
-        result = future.result()
+    def _finish(self, tracked, status, result):
         with self._lock:
-            self._result = result.result
-            self._status = ros2_status_to_ros1(result.status)
-            self._simple_state = SimpleGoalState.DONE
-            self._done_event.set()
-            if self._done_cb:
-                self._done_cb(self._status, self._result)
+            if self._goal is not tracked:
+                return
+            tracked.status = status
+            tracked.result = result
+        if tracked.done_cb is None:
+            tracked.done.set()
+        else:
 
-    def _on_feedback(self, feedback_msg):
-        """Handle feedback from the action."""
+            def notify():
+                try:
+                    tracked.done_cb(status, result)
+                finally:
+                    tracked.done.set()
+
+            # A ROS 1 done callback may block on another action or service.
+            threading.Thread(target=notify, daemon=True).start()
+
+    def _feedback(self, tracked, message):
         with self._lock:
-            if self._feedback_cb:
-                self._feedback_cb(feedback_msg.feedback)
+            if self._goal is not tracked:
+                return
+        if tracked.feedback_cb is not None:
+            tracked.feedback_cb(message.feedback)
 
-    def send_goal_and_wait(self, goal, execute_timeout=rospy.Duration(),
-                           preempt_timeout=rospy.Duration()):
-        """
-        Send a goal and wait for it to complete.
-
-        Args:
-            goal: The goal to send
-            execute_timeout: Max time to wait for execution
-            preempt_timeout: Max time to wait for preemption after timeout
-
-        Returns:
-            The terminal goal status.
-        """
+    def send_goal_and_wait(
+        self,
+        goal,
+        execute_timeout=rospy.Duration(),
+        preempt_timeout=rospy.Duration(),
+    ):
         self.send_goal(goal)
         if not self.wait_for_result(execute_timeout):
-            rospy.logdebug("Canceling goal")
             self.cancel_goal()
-            if self.wait_for_result(preempt_timeout):
-                rospy.logdebug("Preempt finished within timeout")
-            else:
-                rospy.logdebug("Preempt didn't finish within timeout")
+            self.wait_for_result(preempt_timeout)
         return self.get_state()
 
     def wait_for_result(self, timeout=rospy.Duration()):
-        """
-        Block until the goal finishes.
-
-        Args:
-            timeout: Max time to wait. Zero means wait forever.
-
-        Returns:
-            True if goal finished, False on timeout.
-        """
-        if timeout == rospy.Duration() or timeout.to_sec() <= 0:
-            timeout_sec = None
-        else:
-            timeout_sec = timeout.to_sec()
-
-        return self._done_event.wait(timeout=timeout_sec)
+        with self._lock:
+            goal = self._goal
+        return goal is not None and goal.done.wait(_timeout(timeout))
 
     def get_result(self):
-        """Get the result of the current goal."""
         with self._lock:
-            return self._result
+            return self._goal.result if self._goal is not None else None
 
     def get_state(self):
-        """
-        Get the state of the current goal.
-
-        Returns:
-            GoalStatus constant (PENDING, ACTIVE, PREEMPTED, SUCCEEDED, etc.)
-        """
         with self._lock:
-            if self._goal_handle is None:
-                return GoalStatus.LOST
-            return self._status
+            return (
+                self._goal.status if self._goal is not None else GoalStatus.LOST
+            )
 
     def get_goal_status_text(self):
-        """Get the status text for the current goal."""
-        with self._lock:
-            return self._status_text
+        # A native ROS 2 GetResult response contains no status text.
+        return ''
 
     def cancel_goal(self):
-        """Cancel the current goal."""
         with self._lock:
-            if self._goal_handle is not None:
-                self._goal_handle.cancel_goal_async()
-                # Don't wait for the cancel response, the result callback
-                # will handle the terminal state
+            if self._goal is not None:
+                self._goal.cancel_requested = True
+                if self._goal.handle is not None:
+                    self._goal.handle.cancel_goal_async()
 
     def cancel_all_goals(self):
-        """Cancel all goals on the server."""
-        # Note: rclpy doesn't expose a public API for cancel_all_goals
-        # This requires sending a CancelGoal request with empty goal_id
-        rospy.logwarn("cancel_all_goals: not fully implemented in ROS2")
+        rospy.logwarn('cancel_all_goals: not fully implemented in ROS2')
 
     def cancel_goals_at_and_before_time(self, time):
-        """Cancel all goals with timestamps at or before the given time."""
-        # Note: rclpy doesn't expose a public API for timestamp-based cancel
-        rospy.logwarn("cancel_goals_at_and_before_time: not fully implemented in ROS2")
+        rospy.logwarn(
+            'cancel_goals_at_and_before_time: not fully implemented in ROS2'
+        )
 
     def stop_tracking_goal(self):
-        """Stop tracking the current goal without canceling it."""
         with self._lock:
-            self._goal_handle = None
-            self._done_cb = None
-            self._active_cb = None
-            self._feedback_cb = None
+            self._goal = None

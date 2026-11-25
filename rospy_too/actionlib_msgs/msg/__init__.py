@@ -3,34 +3,7 @@
 Provides ROS1-compatible GoalStatus and GoalID message types.
 """
 
-from actionlib.goal_status import GoalStatus
-
-
-class GoalID:
-    """ROS1-compatible GoalID wrapper for ROS2.
-
-    In ROS1, GoalID has:
-        - stamp: time when goal was created
-        - id: unique string identifier
-
-    In ROS2, action goals use UUIDs instead, but this wrapper
-    provides the ROS1 interface for compatibility.
-    """
-
-    __slots__ = ['stamp', 'id']
-
-    def __init__(self, stamp=None, id=''):
-        from builtin_interfaces.msg import Time
-        self.stamp = stamp if stamp is not None else Time()
-        self.id = id
-
-    def __repr__(self):
-        return f'GoalID(stamp={self.stamp}, id={self.id!r})'
-
-    def __eq__(self, other):
-        if not isinstance(other, GoalID):
-            return False
-        return self.stamp == other.stamp and self.id == other.id
+from actionlib.goal_status import GoalID, GoalStatus
 
 
 class GoalStatusArray:
@@ -43,6 +16,7 @@ class GoalStatusArray:
 
     def __init__(self, header=None, status_list=None):
         from std_msgs.msg import Header
+
         self.header = header if header is not None else Header()
         self.status_list = status_list if status_list is not None else []
 

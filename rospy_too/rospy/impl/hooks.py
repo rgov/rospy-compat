@@ -2,9 +2,11 @@
 # Intercepts imports of *.msg and *.srv modules and wraps message classes
 # with ROS1-compatible versions supporting positional arguments.
 
-import array
 import importlib
 import sys
+
+import numpy
+from rclpy.serialization import deserialize_message, serialize_message
 import types
 from importlib.abc import Loader, MetaPathFinder
 from importlib.machinery import ModuleSpec
@@ -24,6 +26,12 @@ _DEFAULT_VALUES = {
 
 
 def _coerce_field_value(field_name, field_type, value):
+    if field_type.startswith('sequence<') and isinstance(value, numpy.ndarray):
+        return value.tolist()
+    if field_type.startswith('sequence<char') and isinstance(
+        value, (bytes, bytearray)
+    ):
+        return list(bytes(value).decode('latin-1'))
     if value is None:
         return _DEFAULT_VALUES.get(field_type, value)
     if field_type in ('double', 'float') and isinstance(value, int) and not isinstance(value, bool):
@@ -35,29 +43,40 @@ def _coerce_field_value(field_name, field_type, value):
     return value
 
 
-def _is_uint8_array_type(field_type):
-    """Check if field type is a uint8/char array (variable, bounded, or fixed-length).
-
-    ROS1 genpy treats both uint8[] and char[] as bytes.
-    """
-    return (
-        field_type.startswith('sequence<uint8')
-        or field_type.startswith('sequence<char')
-        or field_type.startswith('uint8[')
-        or field_type.startswith('char[')
-    )
+def _is_byte_sequence(field_type):
+    return field_type.startswith(('sequence<uint8', 'sequence<char'))
 
 
-def _coerce_to_bytes(field_name, value):
-    if isinstance(value, bytes):
-        return value
-    if isinstance(value, (bytearray, list, tuple, array.array)):
-        logwarn_once(
-            "Coercing field '%s' to bytes: this will break in rclpy",
-            field_name,
-        )
-        return bytes(value)
-    return value
+def prepare_received_message(message):
+    # Foxy type support fills the generated array.array in place. Convert only
+    # after deserialization, including byte fields inside compound messages.
+    cls = type(message)
+    if not hasattr(cls, '_rospy_wrapped'):
+        _create_message_wrapper(cls)
+    view = getattr(cls, '_rospy_byte_view', None)
+    if view is not None and cls is not view:
+        message.__class__ = view
+    for name, kind in cls._fields_and_field_types.items():
+        if '/' in kind:
+            child = getattr(message, name)
+            if kind.startswith('sequence<') or kind.endswith(']'):
+                for item in child:
+                    prepare_received_message(item)
+            else:
+                prepare_received_message(child)
+    return message
+
+
+def _serialize(self, buff):
+    buff.write(serialize_message(self))
+
+
+def _deserialize(self, data):
+    decoded = prepare_received_message(deserialize_message(data, type(self)))
+    for name in self._fields_and_field_types:
+        slot = '_' + name
+        setattr(self, slot, getattr(decoded, slot))
+    return self
 
 
 # Try to import module, falling back to _msgs/_interfaces suffixed packages.
@@ -233,17 +252,15 @@ def _is_time_or_duration(cls):
 def _create_message_wrapper(original_class):
     # Check if already wrapped
     if hasattr(original_class, '_rospy_wrapped'):
-        return original_class
+        return getattr(original_class, '_rospy_byte_view', original_class)
 
     original_init = original_class.__init__
     is_time_type = _is_time_or_duration(original_class)
     field_types = original_class._fields_and_field_types
 
-    # Pre-compute uint8 array fields for fast O(1) lookup
-    uint8_array_fields = frozenset(
-        name for name, ftype in field_types.items()
-        if _is_uint8_array_type(ftype)
-    )
+    byte_fields = {
+        name for name, kind in field_types.items() if _is_byte_sequence(kind)
+    }
 
     def enhanced_init(self, *args, **kwargs):
         # Handle Time/Duration with ROS1-style constructor: (secs) or (secs, nsecs)
@@ -277,52 +294,39 @@ def _create_message_wrapper(original_class):
             value = _coerce_field_value(name, field_types[name], value)
         object.__setattr__(self, name, value)
 
-    def coercing_getattribute(self, name):
-        value = object.__getattribute__(self, name)
-        if name in uint8_array_fields:
-            return _coerce_to_bytes(name, value)
-        return value
+    original_class.__init__ = enhanced_init
+    original_class.__setattr__ = coercing_setattr
+    original_class.serialize = _serialize
+    original_class.deserialize = _deserialize
+    original_class._rospy_wrapped = True
+    original_class._original_ros2_init = original_init
 
-    # Try to replace __init__, __setattr__, __getattribute__ directly
-    try:
-        original_class.__init__ = enhanced_init
-        original_class.__setattr__ = coercing_setattr
-        original_class.__getattribute__ = coercing_getattribute
-        original_class._rospy_wrapped = True
-        original_class._original_ros2_init = original_init
-    except (TypeError, AttributeError):
-        # Class is immutable (e.g., Cython extension type)
-        # Create a dynamic subclass instead
-        class WrappedMessage(original_class):
-            _rospy_wrapped = True
-            _original_ros2_init = original_init
+    if byte_fields:
+        # The generated C module constructs the original class directly. Its
+        # default buffers must stay mutable until convert_to_py has filled
+        # them. Python imports get the same layout with ROS 1 byte defaults.
+        class ByteViewMeta(type(original_class)):
+            def __instancecheck__(cls, instance):
+                return isinstance(instance, original_class)
 
-            def __init__(self, *args, **kwargs):
-                fields = list(self._fields_and_field_types.keys())
-
-                for i, arg in enumerate(args):
-                    if i < len(fields):
-                        field_name = fields[i]
-                        if arg is not None:
-                            kwargs[field_name] = arg
-
-                original_init(self, **kwargs)
-
-            def __setattr__(self, name, value):
-                if name in field_types:
-                    value = _coerce_field_value(name, field_types[name], value)
-                super().__setattr__(name, value)
+        class ByteView(original_class, metaclass=ByteViewMeta):
+            __slots__ = ()
 
             def __getattribute__(self, name):
                 value = super().__getattribute__(name)
-                if name in uint8_array_fields:
-                    return _coerce_to_bytes(name, value)
-                return value
+                if name not in byte_fields:
+                    return value
+                if isinstance(value, list) and value and isinstance(value[0], str):
+                    return ''.join(value).encode('latin-1')
+                return bytes(value)
 
-        WrappedMessage.__name__ = original_class.__name__
-        WrappedMessage.__qualname__ = original_class.__qualname__
-        WrappedMessage.__module__ = original_class.__module__
-        return WrappedMessage
+        # Generated Foxy constructors and repr inspect self.__slots__.
+        ByteView.__slots__ = original_class.__slots__
+        ByteView.__name__ = original_class.__name__
+        ByteView.__qualname__ = original_class.__qualname__
+        ByteView.__module__ = original_class.__module__
+        original_class._rospy_byte_view = ByteView
+        return ByteView
 
     return original_class
 
@@ -414,9 +418,14 @@ def _inject_action_aliases(module, package_name):
             module.__dict__[f'{attr_name}Goal'] = attr.Goal
             module.__dict__[f'{attr_name}Result'] = attr.Result
             module.__dict__[f'{attr_name}Feedback'] = attr.Feedback
-            # ActionGoal/ActionResult/ActionFeedback are just aliases in compat mode
-            module.__dict__[f'{attr_name}ActionGoal'] = attr.Goal
-            module.__dict__[f'{attr_name}ActionResult'] = attr.Result
+            from actionlib.envelopes import envelope_type
+
+            module.__dict__[f'{attr_name}ActionGoal'] = envelope_type(
+                attr.Goal, 'goal'
+            )
+            module.__dict__[f'{attr_name}ActionResult'] = envelope_type(
+                attr.Result, 'result'
+            )
             module.__dict__[f'{attr_name}ActionFeedback'] = attr.Feedback
 
 

@@ -7,6 +7,7 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from .exceptions import (
     ROSException, ROSInitException, ROSInterruptException, ServiceException,
 )
+from .impl.hooks import prepare_received_message
 from .impl.node import _get_node, is_shutdown
 from .impl.pending import register_node_init_callback
 from .logging import logerr, logwarn_once
@@ -50,7 +51,7 @@ class Service:
             # propagate handler failures to clients, so we log and return a
             # default response to prevent executor crashes.
             try:
-                result = self._handler(request)
+                result = self._handler(prepare_received_message(request))
             except Exception as e:
                 logerr(f"Service handler for '{self._name}' raised: {e}")
                 return response  # Return default response
@@ -175,7 +176,7 @@ class ServiceProxy:
                 f'Service call to {self.service_name!r} failed'
             )
 
-        return future.result()
+        return prepare_received_message(future.result())
 
     def close(self):
         pass
