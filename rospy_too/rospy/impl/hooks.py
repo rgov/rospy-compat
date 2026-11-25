@@ -149,7 +149,7 @@ class MessageImportLoader(Loader):
                     setattr(module, meta, getattr(original_module, meta))
 
             # Inject action aliases for .msg modules (ROS1 compatibility)
-            parts = fullname.split('.')
+            parts = original_module.__name__.split('.')
             if len(parts) >= 2 and parts[-1] == 'msg':
                 package_name = '.'.join(parts[:-1])
                 _inject_action_aliases(module, package_name)

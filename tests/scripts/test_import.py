@@ -2,7 +2,10 @@
 # Test basic import functionality
 # This test verifies that rospy can be imported and basic objects exist.
 
+import os
 import sys
+from types import ModuleType
+from unittest.mock import patch
 
 
 def test_import_rospy():
@@ -217,6 +220,25 @@ def test_import_fallback_logic():
     print('OK: import fallback - raises for missing packages')
 
 
+def test_split_package_action_import():
+    if os.environ['ROS_VERSION'] == '1':
+        print('SKIP: split package action import (ROS1)')
+        return
+
+    import rospy  # noqa: F401 - install ROS 1 import hooks
+
+    package = ModuleType('example')
+    package.__path__ = []
+    with patch.dict(sys.modules, {'example': package}):
+        from example.msg import FibonacciAction, FibonacciGoal, FibonacciResult
+        from example_interfaces.action import Fibonacci
+
+        assert FibonacciAction is Fibonacci
+        assert FibonacciGoal(5).order == 5
+        assert FibonacciResult is Fibonacci.Result
+    print('OK: split package action import')
+
+
 def main():
     failed = 0
 
@@ -231,6 +253,7 @@ def main():
         test_ros_time_moved_backwards_exception,
         test_service_exception,
         test_import_fallback_logic,
+        test_split_package_action_import,
     ]
 
     for test in tests:
