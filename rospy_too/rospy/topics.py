@@ -14,6 +14,7 @@ from .logging import logwarn
 from .msg import AnyMsg
 from .names import resolve_name
 
+
 class SubscribeListener:
     def __init__(self):
         logwarn(

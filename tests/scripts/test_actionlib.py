@@ -149,10 +149,11 @@ def test_client_server_interaction():
         print('SKIP: test_client_server_interaction (no test action available)')
         return
 
+    from queue import Queue
+
     import rospy
     from actionlib import SimpleActionClient, SimpleActionServer
     from actionlib_msgs.msg import GoalStatus
-    from queue import Queue
 
     if is_ros2():
         from example_interfaces.msg import FibonacciActionGoal as GoalEnvelope

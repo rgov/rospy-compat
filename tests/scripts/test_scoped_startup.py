@@ -33,9 +33,9 @@ def test_scoped_startup():
     states = []
 
     def record(label):
-        states.append((
-            label, rospy.core.is_shutdown_requested(), rospy.is_shutdown()
-        ))
+        states.append(
+            (label, rospy.core.is_shutdown_requested(), rospy.is_shutdown())
+        )
 
     rospy.on_shutdown(lambda: record('client'))
     rospy.core.add_preshutdown_hook(lambda reason: record('pre'))

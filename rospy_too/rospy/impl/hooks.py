@@ -4,15 +4,14 @@
 
 import importlib
 import sys
-
-import numpy
-from rclpy.serialization import deserialize_message, serialize_message
 import types
 from importlib.abc import Loader, MetaPathFinder
 from importlib.machinery import ModuleSpec
 
-from ..logging import logwarn_once
+import numpy
+from rclpy.serialization import deserialize_message, serialize_message
 
+from ..logging import logwarn_once
 
 # Default values for ROS message field types (ROS1 genpy compatibility)
 _DEFAULT_VALUES = {

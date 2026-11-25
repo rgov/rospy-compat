@@ -5,7 +5,10 @@ import time as python_time
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from .exceptions import (
-    ROSException, ROSInitException, ROSInterruptException, ServiceException,
+    ROSException,
+    ROSInitException,
+    ROSInterruptException,
+    ServiceException,
 )
 from .impl.hooks import prepare_received_message
 from .impl.node import _get_node, is_shutdown

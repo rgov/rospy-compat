@@ -4,7 +4,11 @@ from .impl.node import _get_node, _is_node_initialized, get_rostime, get_time
 from .time import Duration, Time
 
 __all__ = [
-    'Duration', 'Time', 'get_rostime', 'get_time', 'get_rostime_cond',
+    'Duration',
+    'Time',
+    'get_rostime',
+    'get_time',
+    'get_rostime_cond',
     'is_wallclock',
 ]
 

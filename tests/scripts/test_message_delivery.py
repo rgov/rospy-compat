@@ -48,7 +48,9 @@ def test_anymsg_round_trip_and_typed_binary_receive():
     pub = rospy.Publisher('binary', CompressedImage, queue_size=1)
     raw_pub = rospy.Publisher('binary_raw', CompressedImage, queue_size=1)
 
-    wait_until(lambda: pub.get_num_connections() and raw_pub.get_num_connections())
+    wait_until(
+        lambda: pub.get_num_connections() and raw_pub.get_num_connections()
+    )
     msg = CompressedImage()
     assert isinstance(msg.data, bytes) and msg.data == b''
     msg = CompressedImage(data=b'\x00robot\xff')
@@ -90,7 +92,10 @@ def test_profile_arrays_and_sequence_number():
     msg.data = numpy.array([1.5, 2.5])
     buf = io.BytesIO()
     msg.serialize(buf)
-    assert list(Float32MultiArray().deserialize(buf.getvalue()).data) == [1.5, 2.5]
+    assert list(Float32MultiArray().deserialize(buf.getvalue()).data) == [
+        1.5,
+        2.5,
+    ]
 
 
 def main():
