@@ -52,8 +52,8 @@ class TimerEvent:
     ):
         self.last_expected = last_expected
         self.last_real = last_real
-        self.current_expected = current_expected or Time.now()
-        self.current_real = current_real or Time.now()
+        self.current_expected = current_expected
+        self.current_real = current_real
         self.last_duration = last_duration
 
 

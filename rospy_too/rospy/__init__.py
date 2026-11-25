@@ -79,14 +79,14 @@ from .params import (
     set_param,
 )
 
-# Rate and timers
-from .rate import Rate, Timer, TimerEvent, sleep
-
 # Services
 from .services import Service, ServiceException, ServiceProxy, wait_for_service
 
 # Time
 from .time import Duration, Time
+
+# Rate and timers
+from .timer import Rate, Timer, TimerEvent, sleep
 
 # Topics
 from .topics import Publisher, SubscribeListener, Subscriber, wait_for_message

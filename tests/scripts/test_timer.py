@@ -1,10 +1,23 @@
 #!/usr/bin/env python3
 # Test Timer and Rate functionality
-# These tests require a ROS node to be initialized.
 
 import sys
 import threading
 import time
+
+
+def test_timer_module_before_init():
+    import rospy
+    from rospy.timer import Rate, Timer, TimerEvent, sleep
+
+    assert not rospy.core.is_initialized()
+    assert (Rate, Timer, sleep) == (rospy.Rate, rospy.Timer, rospy.sleep)
+    event = TimerEvent(None, None, None, None, None)
+    assert event.last_expected is None
+    assert event.last_real is None
+    assert event.current_expected is None
+    assert event.current_real is None
+    assert event.last_duration is None
 
 
 def setup():
@@ -62,6 +75,7 @@ def test_timer_event_fields():
     timer.shutdown()
 
     te = events[0]
+    assert isinstance(te, rospy.timer.TimerEvent)
     # TimerEvent should have these attributes
     assert hasattr(te, 'last_expected'), 'TimerEvent should have last_expected'
     assert hasattr(te, 'last_real'), 'TimerEvent should have last_real'
@@ -208,6 +222,7 @@ def main():
     failed = 0
 
     tests = [
+        test_timer_module_before_init,
         test_timer_basic,
         test_timer_event_fields,
         test_timer_oneshot,
