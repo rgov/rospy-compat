@@ -11,8 +11,8 @@ from .exceptions import (
     ServiceException,
 )
 from .impl.hooks import prepare_received_message
-from .impl.node import _get_node, is_shutdown
-from .impl.pending import register_node_init_callback
+from .impl.node import _get_node, _node_lock, is_shutdown
+from .impl.pending import cancel_node_init_callback, register_node_init_callback
 from .logging import logerr, logwarn_once
 from .names import resolve_name
 
@@ -43,6 +43,7 @@ class Service:
         self._name = name
         self._service_type = service_type
         self._handler = handler
+        self._node = None
         self._service = None
         register_node_init_callback(self)
 
@@ -88,12 +89,15 @@ class Service:
             wrapped,
             callback_group=MutuallyExclusiveCallbackGroup(),
         )
+        self._node = node
 
     def shutdown(self, reason=''):
-        if self._service is None:
-            return
-        _get_node().destroy_service(self._service)
-        self._service = None
+        with _node_lock:
+            if self._service is None:
+                cancel_node_init_callback(self)
+                return
+            self._node.destroy_service(self._service)
+            self._service = self._node = None
 
 
 class ServiceProxy:

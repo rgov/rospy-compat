@@ -140,12 +140,13 @@ def _shutdown_node_internal():
     _executor_thread = None
 
     # Destroy node last
-    if _node is not None:
-        try:
-            _node.destroy_node()
-        except Exception:
-            pass
-        _node = None
+    with _node_lock:
+        if _node is not None:
+            try:
+                _node.destroy_node()
+            except Exception:
+                pass
+            _node = None
 
 
 def _register_signal_handlers():

@@ -364,6 +364,31 @@ print("SUBPROCESS_OK: is_shutdown correct")
     print("OK: is_shutdown reflects state")
 
 
+def test_service_shutdown_across_node_lifecycle():
+    result = _run_python_with_coverage('''
+import pytest
+import rospy
+from std_srvs.srv import Empty, EmptyResponse
+
+def handle(request):
+    return EmptyResponse()
+
+withdrawn = rospy.Service('/test/withdrawn_service', Empty, handle)
+withdrawn.shutdown('before init')
+rospy.init_node('service_lifecycle', anonymous=True)
+with pytest.raises(rospy.ROSException):
+    rospy.wait_for_service('/test/withdrawn_service', timeout=0.2)
+
+active = rospy.Service('/test/active_service', Empty, handle)
+rospy.wait_for_service('/test/active_service', timeout=3)
+rospy.signal_shutdown('done')
+active.shutdown('after spin')
+active.shutdown()
+''')
+    assert result.returncode == 0, result.stderr
+    print('OK: service cleanup before init and after node shutdown')
+
+
 def main():
     failed = 0
 
@@ -373,6 +398,7 @@ def main():
         test_sigint_graceful_shutdown,
         test_multiple_shutdown_calls_idempotent,
         test_is_shutdown_reflects_state,
+        test_service_shutdown_across_node_lifecycle,
     ]
 
     for test in tests:
